@@ -1,0 +1,30 @@
+server:
+  port: 8081
+  shutdown: graceful
+
+spring:
+  application:
+    name: account-service
+  datasource:
+    url: jdbc:mysql://{DB_HOST}:{DB_PORT}/{DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    username: { USER }
+    password: { PASSWORD }
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+      connection-timeout: 30000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        highlight_sql: true
+        generate_statistics: true
+  data:
+    redis:
+      host: { REDIS_HOST }
+      port: { REDIS_PORT }
+      timeout: 2000
