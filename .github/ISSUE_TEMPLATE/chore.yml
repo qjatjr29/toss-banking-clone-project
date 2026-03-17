@@ -1,8 +1,8 @@
 name: Chore
 description: 설정, 정리, 유지보수 작업
-title: '[Chore] '
-labels: []
-assignees: []
+title: "[Chore] "
+labels: [chore]
+assignees: [qjatjr29]
 
 body:
   - type: markdown
