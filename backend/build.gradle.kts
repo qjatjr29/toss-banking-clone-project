@@ -1,78 +1,70 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
-	kotlin("jvm") version "2.2.21"
-	kotlin("plugin.spring") version "2.2.21"
-	id("org.springframework.boot") version "4.0.3"
-	id("io.spring.dependency-management") version "1.1.7"
-	kotlin("plugin.jpa") version "2.2.21"
+	kotlin("jvm") version "2.2.21" apply false
+	kotlin("plugin.spring") version "2.2.21" apply false
+	id("org.springframework.boot") version "4.0.3" apply false
+	id("io.spring.dependency-management") version "1.1.7" apply false
+	kotlin("plugin.jpa") version "2.2.21" apply false
+
 }
 
-group = "com"
-version = "1.0.0"
-description = "toss bank clone"
+allprojects {
+	group = "com.tossbank"
+	version = "1.0.0"
 
-java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+	repositories {
+		mavenCentral()
 	}
 }
 
-repositories {
-	mavenCentral()
-}
+subprojects {
+	apply(plugin = "org.jetbrains.kotlin.jvm")
+	apply(plugin = "org.jetbrains.kotlin.plugin.spring")
+	apply(plugin = "org.jetbrains.kotlin.plugin.jpa")
+	apply(plugin = "org.springframework.boot")
+	apply(plugin = "io.spring.dependency-management")
 
-dependencies {
-
-	// WebFlux & Coroutine
-	implementation("org.springframework.boot:spring-boot-starter-webflux")
-	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-	implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
-	implementation("org.jetbrains.kotlin:kotlin-reflect")
-
-	// JPA & MySQL
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-	runtimeOnly("com.mysql:mysql-connector-j")
-
-	// Redis & Redisson (분산 락)
-	implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
-	implementation("org.redisson:redisson-spring-boot-starter:4.3.0")
-
-	// Kafka
-	implementation("org.springframework.boot:spring-boot-starter-kafka")
-
-	// Kotest & MockK
-	testImplementation("org.springframework.boot:spring-boot-starter-webflux-test")
-	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-
-	val kotestVersion = "6.1.6"
-	testImplementation("io.kotest:kotest-runner-junit5-jvm:$kotestVersion")
-	testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
-	testImplementation("io.kotest.extensions:kotest-extensions-spring:1.3.0")
-	testImplementation("io.mockk:mockk:1.13.17")
-
-	testImplementation("org.springframework.boot:spring-boot-starter-test") {
-		// Kotest를 사용할 것이므로 기본 JUnit Vintage와 JUnit Jupiter 엔진 충돌 방지
-		exclude(module = "junit")
-		exclude(group = "org.junit.vintage", module = "junit-vintage-engine")
-		exclude(group = "org.mockito", module = "mockito-core") // MockK를 쓰므로 Mockito 제외
+	configure<JavaPluginExtension> {
+		sourceCompatibility = JavaVersion.VERSION_21
+		toolchain {
+			languageVersion.set(JavaLanguageVersion.of(21))
+		}
 	}
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
 
-kotlin {
-	jvmToolchain(21)
-	compilerOptions {
-		freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+	dependencies {
+		val implementation by configurations
+		val testImplementation by configurations
+
+		// Kotlin & Coroutines
+		implementation("org.jetbrains.kotlin:kotlin-reflect")
+		implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+		implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+		implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
+		// Logging
+		implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+
+		// Test
+		testImplementation("org.springframework.boot:spring-boot-starter-test")
+		testImplementation("io.projectreactor:reactor-test")
+		testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 	}
-}
 
-allOpen {
-	annotation("jakarta.persistence.Entity")
-	annotation("jakarta.persistence.MappedSuperclass")
-	annotation("jakarta.persistence.Embeddable")
-}
+	tasks.withType<KotlinCompile> {
+		compilerOptions {
+			freeCompilerArgs.addAll("-Xjsr305=strict")
+			jvmTarget.set(JvmTarget.JVM_21)
+		}
+	}
 
-tasks.withType<Test> {
-	useJUnitPlatform()
+	tasks.withType<Test> {
+		useJUnitPlatform()
+	}
+
+	tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootBuildImage> {
+		imageName.set("tossbank/${project.name}:${project.version}")
+//		builder.set("paketobuildpacks/builder:base")
+	}
 }

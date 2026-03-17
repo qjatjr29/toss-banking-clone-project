@@ -9,12 +9,20 @@ services:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: toss_bank
+      TZ: Asia/Seoul
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - toss-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis (분산 락 및 캐싱 용도)
   redis:
@@ -22,14 +30,22 @@ services:
     container_name: toss-redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+#    command: redis-server --appendonly yes
+    networks:
+      - toss-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Kafka (Bitnami KRaft Mode - 초경량 설정)
+  # Kafka
   kafka:
     image: apache/kafka:latest
     container_name: toss-kafka
     ports:
       - "9092:9092"
+      - "9093:9093"
     environment:
       # 노드 및 역할 설정
       KAFKA_NODE_ID: 1
@@ -40,7 +56,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       # 복제본 설정 (Single Node이므로 1)
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -48,13 +64,20 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     volumes:
       - kafka_data:/var/lib/kafka/data
+    networks:
+      - toss-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   #  Kafka UI
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: toss-kafka-ui
     ports:
-      - "8081:8080" # 웹 브라우저에서 http://localhost:8081 로 접속
+      - "8090:8080"
     environment:
       - DYNAMIC_CONFIG_ENABLED=true
       - KAFKA_CLUSTERS_0_NAME=TossBank-Local
@@ -62,6 +85,60 @@ services:
     depends_on:
       - kafka
 
+  api-gateway:
+    image: tossbank/api-gateway:1.0.0
+    container_name: toss-api-gateway
+    ports:
+      - "8080:8080"
+    networks:
+      - toss-network
+
+  account-service:
+    image: tossbank/account-service:1.0.0
+    container_name: toss-account-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/toss_account?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      - SPRING_DATA_REDIS_HOST=redis
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - toss-network
+
+  transfer-service:
+    image: tossbank/transfer-service:1.0.0
+    container_name: toss-transfer-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/toss_transfer?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - toss-network
+
+  external-banking-service:
+    image: tossbank/external-banking-service:1.0.0
+    container_name: toss-external-banking
+    ports:
+      - "8083:8083"
+    networks:
+      - toss-network
 volumes:
   mysql_data:
   kafka_data:
+
+networks:
+  toss-network:
+    driver: bridge
