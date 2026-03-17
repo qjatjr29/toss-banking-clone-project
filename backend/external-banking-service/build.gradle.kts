@@ -1,23 +1,7 @@
-//plugins {
-//    kotlin("jvm")
-//}
-//
-//group = "com"
-//version = "1.0.0"
-//
-//repositories {
-//    mavenCentral()
-//}
-//
-//dependencies {
-//    testImplementation(kotlin("test"))
-//}
-//
-//tasks.test {
-//    useJUnitPlatform()
-//}
-
 dependencies {
-    implementation(project(":common"))
+    implementation(project(":common")) {
+        exclude(group = "org.springframework.boot", module = "spring-boot-starter-data-jpa")
+        exclude(group = "org.hibernate.orm", module = "hibernate-core")
+    }
     implementation("org.springframework.boot:spring-boot-starter-webflux")
 }
