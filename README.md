@@ -1,6 +1,7 @@
 ## <img width="25" height="25" alt="Image" src="https://noticon-static.tammolo.com/dgggcrkxq/image/upload/v1662515801/noticon/dtalt5gl3xkddalhat8o.png" /> Toss Bank Clone
 
 ### 프로젝트 기간
+
 `2026.03.16 ~ 2026.03.29`
 
 ### 📌 프로젝트 개요
@@ -26,6 +27,7 @@
 ### 🤖 **기술 스택 (Tech Stack)**
 
 ### Backend
+
 ![Java](https://img.shields.io/badge/Java-%23ED8B00.svg?style=flat&logo=openjdk&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-%237F52FF.svg?style=flat&logo=kotlin&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-6DB33F?style=flat&logo=spring-boot&logoColor=white)
@@ -34,24 +36,87 @@
 ![Gradle](https://img.shields.io/badge/gradle-02303A?style=flat&logo=gradle&logoColor=white)
 
 ### Frontend
+
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
 ![React Router](https://img.shields.io/badge/React_Router-CA4245?style=flat&logo=react-router&logoColor=white)
 
-
 ### DB
+
 ![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat&logo=MySQL&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-FF4438?style=flat&logo=Redis&logoColor=white)
 
 ### Message Broker
+
 ![Apache Kafka](https://img.shields.io/badge/kafka-231F20?style=flat&logo=apachekafka&logoColor=white)
 
 ### Infrastructure & Testing
+
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=Docker&logoColor=white)
 ![Docker Compose](https://img.shields.io/badge/Docker_Compose-2496ED?style=flat&logo=docker_compose&logoColor=white)
 ![k6](https://img.shields.io/badge/k6-7D64FF?style=flat&logo=k6&logoColor=white)
 ![JUnit5](https://img.shields.io/badge/JUnit5-25A162?style=flat&logo=JUnit5&logoColor=white)
 ![KoTest](https://img.shields.io/badge/kotest-00FF74?style=flat&logo=vitest&logoColor=white)
 
+## 🚀 백엔드 실행 방법
+
+### 1️⃣ 전체 빌드 (Docker 이미지 생성)
+
+```
+make build-all
+```
+
+또는 특정 서비스만:
+
+```
+make build-account
+make build-transfer
+```
+
+---
+
+### 2️⃣ 전체 서비스 실행
+
+```
+make up
+```
+
+실행되는 서비스:
+
+- MySQL
+- Redis
+- Kafka
+- Kafka UI
+- api-gateway
+- account-service
+- transfer-service
+- external-banking-service
+
+---
+
+### 3️⃣ 로그 확인
+
+```
+make logs
+```
+
+---
+
+### 4️⃣ 특정 서비스 재시작 (코드 수정 후)
+
+```
+make restart-account
+make restart-transfer
+```
+
+👉 해당 서비스만 다시 빌드 + 재실행됩니다.
+
+---
+
+### 5️⃣ 전체 종료 (데이터까지 삭제)
+
+```
+make down
+```
