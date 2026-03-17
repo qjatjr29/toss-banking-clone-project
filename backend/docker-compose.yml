@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # MySQL (코어뱅킹 메인 DB)
+  mysql:
+    image: mysql:8.0
+    container_name: toss-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: toss_bank
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # Redis (분산 락 및 캐싱 용도)
+  redis:
+    image: redis:7.0-alpine
+    container_name: toss-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+
+  # Kafka (Bitnami KRaft Mode - 초경량 설정)
+  kafka:
+    image: apache/kafka:latest
+    container_name: toss-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # 노드 및 역할 설정
+      KAFKA_NODE_ID: 1
+      KAFKA_JVM_PERFORMANCE_OPTS: "-Xmx512m -Xms512m"
+      KAFKA_PROCESS_ROLES: broker,controller
+      # 리스너 및 주소 매핑 (9092=외부용, 9093=컨트롤러 내부용)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      # 복제본 설정 (Single Node이므로 1)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  #  Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: toss-kafka-ui
+    ports:
+      - "8081:8080" # 웹 브라우저에서 http://localhost:8081 로 접속
+    environment:
+      - DYNAMIC_CONFIG_ENABLED=true
+      - KAFKA_CLUSTERS_0_NAME=TossBank-Local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    depends_on:
+      - kafka
+
+volumes:
+  mysql_data:
+  kafka_data:
