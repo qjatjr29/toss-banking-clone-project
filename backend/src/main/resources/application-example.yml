@@ -1,0 +1,62 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: toss-bank-core
+
+  # MySQL (JPA & DataSource)
+  datasource:
+    url: jdbc:mysql://{DB_HOST}:{DB_PORT}/{DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: { DB_USER }
+    password: { DB_PWD }
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+      connection-timeout: 30000
+#      transaction-isolation: TRANSACTION_READ_COMMITTED
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        highlight_sql: true
+        #        dialect: org.hibernate.dialect.MySQL8Dialect
+        generate_statistics: true
+
+  # Redis
+  data:
+    redis:
+      host: { REDIS_HOST }
+      port: { REDIS_PORT }
+      timeout: 2000
+
+  # Kafka
+  kafka:
+    bootstrap-servers: { HOST }:{PORT}
+    producer:
+      # Kafka
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: {GROUP_ID}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+logging:
+  level:
+    root: INFO
+    com.tossBank.core: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
