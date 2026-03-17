@@ -1,76 +1,69 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
-	kotlin("jvm") version "2.2.21"
-	kotlin("plugin.spring") version "2.2.21"
-	id("org.springframework.boot") version "4.0.3"
-	id("io.spring.dependency-management") version "1.1.7"
-	kotlin("plugin.jpa") version "2.2.21"
-
-	// JPA 지연 로딩을 위해 엔티티 클래스를 강제로 open 상태로 만들어주는 플러그인
-//	kotlin("plugin.allopen") version "2.2.21"
+	kotlin("jvm") version "2.2.21" apply false
+	kotlin("plugin.spring") version "2.2.21" apply false
+	id("org.springframework.boot") version "4.0.3" apply false
+	id("io.spring.dependency-management") version "1.1.7" apply false
+	kotlin("plugin.jpa") version "2.2.21" apply false
 }
 
-group = "com"
-version = "1.0.0"
-description = "toss bank clone"
+allprojects {
+	group = "com.tossbank"
+	version = "1.0.0"
 
-java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+	repositories {
+		mavenCentral()
 	}
 }
 
-repositories {
-	mavenCentral()
-}
+subprojects {
+	apply(plugin = "org.jetbrains.kotlin.jvm")
+	apply(plugin = "org.jetbrains.kotlin.plugin.spring")
+	apply(plugin = "org.jetbrains.kotlin.plugin.jpa")
+	apply(plugin = "org.springframework.boot")
+	apply(plugin = "io.spring.dependency-management")
 
-dependencies {
-
-	// WebFlux & Coroutine
-	implementation("org.springframework.boot:spring-boot-starter-webflux")
-	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-	implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
-	implementation("org.jetbrains.kotlin:kotlin-reflect")
-
-	// JPA & MySQL
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-	runtimeOnly("com.mysql:mysql-connector-j")
-
-	// Redis & Redisson (분산 락)
-	implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
-	implementation("org.redisson:redisson-spring-boot-starter:4.3.0")
-
-	// Kafka
-	implementation("org.springframework.boot:spring-boot-starter-kafka")
-
-	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
-	testImplementation("org.springframework.boot:spring-boot-starter-data-redis-reactive-test")
-	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
-	testImplementation("org.springframework.boot:spring-boot-starter-webflux-test")
-	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-	testImplementation("io.kotest:kotest-runner-junit5:5.8.0")
-	// Kotest 검증(Assertion) 라이브러리 (shouldBe 등)
-	testImplementation("io.kotest:kotest-assertions-core:5.8.0")
-	// Kotest에서 @SpringBootTest 등 스프링 빈을 주입받기 위한 확장 모듈
-	testImplementation("io.kotest.extensions:kotest-extensions-spring:1.1.3")
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-kotlin {
-	jvmToolchain(21)
-	compilerOptions {
-		freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+	configure<JavaPluginExtension> {
+		sourceCompatibility = JavaVersion.VERSION_21
+		toolchain {
+			languageVersion.set(JavaLanguageVersion.of(21))
+		}
 	}
-}
 
-allOpen {
-	annotation("jakarta.persistence.Entity")
-	annotation("jakarta.persistence.MappedSuperclass")
-	annotation("jakarta.persistence.Embeddable")
-}
+	dependencies {
+		val implementation by configurations
+		val testImplementation by configurations
 
-tasks.withType<Test> {
-	useJUnitPlatform()
+		// Kotlin & Coroutines
+		implementation("org.jetbrains.kotlin:kotlin-reflect")
+		implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+		implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+		implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
+		// Logging
+		implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+
+		// Test
+		testImplementation("org.springframework.boot:spring-boot-starter-test")
+		testImplementation("io.projectreactor:reactor-test")
+		testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+	}
+
+	tasks.withType<KotlinCompile> {
+		compilerOptions {
+			freeCompilerArgs.addAll("-Xjsr305=strict")
+			jvmTarget.set(JvmTarget.JVM_21)
+		}
+	}
+
+	tasks.withType<Test> {
+		useJUnitPlatform()
+	}
+
+	tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootBuildImage> {
+		imageName.set("tossbank/${project.name}:${project.version}")
+	}
+
 }

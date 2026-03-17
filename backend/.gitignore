@@ -225,3 +225,5 @@ gradle-app.setting
 *.hprof
 
 /.idea
+
+application.yml

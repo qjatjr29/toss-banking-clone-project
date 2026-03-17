@@ -1,0 +1,34 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: transfer-service
+  datasource:
+    url: jdbc:mysql://{DB_HOST}:{DB_PORT}/{DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    username: { USERNAME }
+    password: { PASSWORD }
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  data:
+    redis:
+      host: { REDIS_HOST }
+      port: { REDIS_PORT }
+  kafka:
+    bootstrap-servers: { KAFKA_HOST }:{KAFKA_PORT}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all # 전송 보장
+    consumer:
+      group-id: transfer-saga-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
