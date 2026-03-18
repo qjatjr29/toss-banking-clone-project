@@ -1,3 +1,7 @@
+plugins {
+    kotlin("plugin.jpa")
+}
+
 // bootJar 태스크 비활성화
 tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootJar> {
     enabled = false
@@ -14,6 +18,6 @@ tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootBuildImage> {
 }
 
 dependencies {
-//    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     compileOnly("org.springframework.boot:spring-boot-starter-webflux")
 }

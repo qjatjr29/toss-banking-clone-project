@@ -7,6 +7,7 @@ plugins {
 	id("org.springframework.boot") version "4.0.3" apply false
 	id("io.spring.dependency-management") version "1.1.7" apply false
 	kotlin("plugin.jpa") version "2.2.21" apply false
+
 }
 
 allprojects {
@@ -64,6 +65,6 @@ subprojects {
 
 	tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootBuildImage> {
 		imageName.set("tossbank/${project.name}:${project.version}")
+//		builder.set("paketobuildpacks/builder:base")
 	}
-
 }
