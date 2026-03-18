@@ -23,4 +23,10 @@ dependencies {
 	testImplementation("io.kotest.extensions:kotest-extensions-spring:1.1.3")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("io.mockk:mockk:1.13.10")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.testcontainers:testcontainers:2.0.3")
+    testImplementation("io.kotest.extensions:kotest-extensions-spring:1.1.3")
+//    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    testImplementation("org.testcontainers:mysql:1.21.4")
 }
