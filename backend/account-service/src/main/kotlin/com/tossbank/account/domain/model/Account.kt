@@ -45,7 +45,6 @@ class Account(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
-        protected set
 
     fun deposit(amount: BigDecimal) {
         verifyActive()

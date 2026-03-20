@@ -53,7 +53,6 @@ class TransactionHistory(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L
-        protected set
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
