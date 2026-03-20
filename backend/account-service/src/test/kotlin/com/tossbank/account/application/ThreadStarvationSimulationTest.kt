@@ -6,10 +6,7 @@ import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import java.util.concurrent.Executors
 import kotlin.system.measureTimeMillis
 
@@ -25,7 +22,17 @@ import kotlin.system.measureTimeMillis
 class ThreadStarvationSimulationTest : BehaviorSpec({
 
     val accountRepository = mockk<AccountRepository>()
-    val service = AccountQueryService(accountRepository)
+
+    val blockingService = AccountQueryService(
+        accountRepository = accountRepository,
+        dbDispatcher      = Dispatchers.Unconfined,
+    )
+
+    // ✅ Dispatchers.IO → IO 스레드로 위임 = 논블로킹
+    val nonBlockingService = AccountQueryService(
+        accountRepository = accountRepository,
+        dbDispatcher      = Dispatchers.IO,
+    )
 
     // Netty 이벤트 루프를 흉내내는 4개 스레드 풀 (CPU 코어 4개 가정)
     val nettySimulator = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
@@ -48,7 +55,7 @@ class ThreadStarvationSimulationTest : BehaviorSpec({
                         launch {
                             // 4개 스레드가 50ms 블로킹을 번갈아 처리
                             // → 4개 스레드가 멈춰있는 동안 다른 요청 전혀 처리 불가
-                            service.getActiveAccountsBlocking(memberId.toLong())
+                            blockingService.getActiveAccounts(memberId.toLong())
                         }
                     }.joinAll()
                 }
@@ -73,7 +80,7 @@ class ThreadStarvationSimulationTest : BehaviorSpec({
                         launch {
                             // Netty 스레드는 즉시 IO 워커에 위임하고 다음 요청 처리
                             // → IO 워커 64개가 50개 요청을 거의 동시에 처리
-                            service.getActiveAccounts(memberId.toLong())
+                            nonBlockingService.getActiveAccounts(memberId.toLong())
                         }
                     }.joinAll()
                 }
