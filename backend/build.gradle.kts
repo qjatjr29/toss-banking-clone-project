@@ -10,13 +10,13 @@ plugins {
 
 }
 
+val javaVersion = JavaVersion.VERSION_21
+val springCloudVersion = "2025.1.0"
+
 allprojects {
 	group = "com.tossbank"
 	version = "1.0.0"
-
-	repositories {
-		mavenCentral()
-	}
+	repositories { mavenCentral() }
 }
 
 subprojects {
@@ -27,15 +27,15 @@ subprojects {
 	apply(plugin = "io.spring.dependency-management")
 
 	configure<JavaPluginExtension> {
-		sourceCompatibility = JavaVersion.VERSION_21
-		toolchain {
-			languageVersion.set(JavaLanguageVersion.of(21))
-		}
+		sourceCompatibility = javaVersion
+		toolchain {  languageVersion.set(JavaLanguageVersion.of(21)) }
 	}
 
 	dependencies {
 		val implementation by configurations
 		val testImplementation by configurations
+
+		implementation(platform("org.springframework.cloud:spring-cloud-dependencies:$springCloudVersion"))
 
 		// Kotlin & Coroutines
 		implementation("org.jetbrains.kotlin:kotlin-reflect")

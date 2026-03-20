@@ -14,6 +14,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
     implementation("org.redisson:redisson-spring-boot-starter:4.3.0")
 
+    // Kafka
+    implementation("org.springframework.kafka:spring-kafka")
+
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 	testImplementation("io.kotest:kotest-runner-junit5:5.8.0")
