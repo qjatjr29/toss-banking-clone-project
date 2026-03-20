@@ -21,22 +21,7 @@ class AccountQueryService(
     private val accountRepository: AccountRepository,
     @Qualifier("dbDispatcher") private val dbDispatcher: CoroutineDispatcher,
 ) {
-    // =========================================================
-    // ⚠️ 이 메서드는 문제를 보여주기 위한 코드입니다. 실제 사용 금지!
-    // Dispatchers.IO 없이 직접 JPA 호출
-    // Netty 이벤트 루프 스레드가 직접 블로킹 → Thread Starvation 유발
-    // =========================================================
-    suspend fun getActiveAccountsBlocking(memberId: Long): List<AccountResponse> {
-        log.warn("[BLOCKING ⚠️] 스레드 = {}", Thread.currentThread().name)
 
-        // Dispatchers.IO 없이 현재 스레드(Netty)에서 직접 JPA 호출
-        // → Netty 이벤트 루프 스레드가 DB 응답 올 때까지 멈춰버림!
-        val accounts = accountRepository.findAllByMemberIdAndStatus(memberId, AccountStatus.ACTIVE)
-
-        return accounts.map { AccountResponse.from(it) }
-    }
-
-    // Netty 이벤트 루프 보호 → Thread Starvation 방지
     suspend fun getActiveAccounts(memberId: Long): List<AccountResponse> {
         return withContext(dbDispatcher) {
             accountRepository
