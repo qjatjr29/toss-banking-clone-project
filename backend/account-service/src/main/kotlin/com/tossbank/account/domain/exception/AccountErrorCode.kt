@@ -19,5 +19,15 @@ enum class AccountErrorCode(
 
     // 계좌 상태 관련 에러
     ACCOUNT_SUSPENDED(HttpStatus.BAD_REQUEST, "A006", "정지된 계좌입니다. 거래가 불가능합니다."),
-    ACCOUNT_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "A007", "이미 해지된 계좌입니다.")
+    ACCOUNT_ALREADY_CLOSED(HttpStatus.BAD_REQUEST, "A007", "이미 해지된 계좌입니다."),
+    INVALID_ACCOUNT_STATUS(HttpStatus.BAD_REQUEST, "A008", "현재 계좌 상태에서 허용되지 않는 작업입니다."),
+    ACCOUNT_HAS_REMAINING_BALANCE(HttpStatus.BAD_REQUEST, "A009", "잔액이 남아있어 계좌를 해지할 수 없습니다."),
+
+    // 이체
+    TRANSFER_SAME_ACCOUNT(HttpStatus.BAD_REQUEST, "A010", "출금 계좌와 입금 계좌가 동일합니다."),
+    LOCK_ACQUISITION_FAILED(HttpStatus.CONFLICT, "A011", "잠시 후 다시 시도해 주세요. (락 획득 실패)"),
+
+    // 타행 관련 (추후 구현)
+    EXTERNAL_TRANSFER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "A012", "타행 이체는 현재 지원하지 않습니다."),
+    EXTERNAL_BANK_INQUIRY_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "A013", "타행 계좌 실명조회는 현재 지원하지 않습니다."),
 }
