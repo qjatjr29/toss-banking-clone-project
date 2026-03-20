@@ -59,6 +59,7 @@ class TransactionHistory(
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: LocalDateTime = LocalDateTime.now()
         protected set
+
     companion object {
         fun ofDeposit(
             accountId: Long,
@@ -95,9 +96,10 @@ class TransactionHistory(
             amount: BigDecimal,
             balanceAfterTx: BigDecimal,
             counterpartAccountNumber: String,
-            counterpartName: String,          // 거래 시점 이름 스냅샷
+            counterpartName: String,
             description: String,
             isOutgoing: Boolean,
+            idempotencyKey: String? = null,
         ) = TransactionHistory(
             accountId                = accountId,
             transactionType          = if (isOutgoing) TransactionType.TRANSFER
@@ -107,6 +109,7 @@ class TransactionHistory(
             counterpartAccountNumber = counterpartAccountNumber,
             counterpartName          = counterpartName,
             description              = description,
+            idempotencyKey           = idempotencyKey,
         )
     }
 }
