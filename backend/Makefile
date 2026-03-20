@@ -30,3 +30,6 @@ restart-transfer: build-transfer
 # 전체 로그 보기
 logs:
 	docker-compose logs -f
+
+test:
+	./gradlew test

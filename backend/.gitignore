@@ -227,3 +227,7 @@ gradle-app.setting
 /.idea
 
 application.yml
+
+.env
+
+/mysql-init/init.sql

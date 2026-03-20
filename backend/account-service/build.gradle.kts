@@ -14,6 +14,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
     implementation("org.redisson:redisson-spring-boot-starter:4.3.0")
 
+    // Kafka
+    implementation("org.springframework.kafka:spring-kafka")
+
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 	testImplementation("io.kotest:kotest-runner-junit5:5.8.0")
@@ -27,6 +30,5 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.testcontainers:testcontainers:2.0.3")
     testImplementation("io.kotest.extensions:kotest-extensions-spring:1.1.3")
-//    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.testcontainers:mysql:1.21.4")
 }

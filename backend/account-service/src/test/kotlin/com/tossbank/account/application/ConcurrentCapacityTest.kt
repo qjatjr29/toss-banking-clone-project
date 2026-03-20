@@ -6,6 +6,7 @@ import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -26,7 +27,10 @@ import kotlin.system.measureTimeMillis
 class ConcurrentCapacityTest : StringSpec({
 
     val accountRepository = mockk<AccountRepository>()
-    val service = AccountQueryService(accountRepository)
+    val service = AccountQueryService(
+        accountRepository = accountRepository,
+        dbDispatcher      = Dispatchers.IO,
+    )
 
     // 실제로 DB에 접근 중인 동시 요청 수 카운터
     val peakConcurrentDbCalls = AtomicInteger(0)
