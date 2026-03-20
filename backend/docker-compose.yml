@@ -51,13 +51,13 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_JVM_PERFORMANCE_OPTS: "-Xmx512m -Xms512m"
       KAFKA_PROCESS_ROLES: broker,controller
-      # 리스너 및 주소 매핑 (9092=외부용, 9093=컨트롤러 내부용)
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+
+      # 내부(29092) / 외부(9092) 리스너 분리
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      # 복제본 설정 (Single Node이므로 1)
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -81,9 +81,11 @@ services:
     environment:
       - DYNAMIC_CONFIG_ENABLED=true
       - KAFKA_CLUSTERS_0_NAME=TossBank-Local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
     depends_on:
       - kafka
+    networks:
+      - toss-network
 
   api-gateway:
     image: tossbank/api-gateway:1.0.0
@@ -100,6 +102,8 @@ services:
       - "8081:8081"
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/toss_account?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      - SPRING_DATASOURCE_USERNAME=${ACCOUNT_DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${ACCOUNT_DB_PASSWORD}
       - SPRING_DATA_REDIS_HOST=redis
     depends_on:
       mysql:
@@ -116,6 +120,8 @@ services:
       - "8082:8082"
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/toss_transfer?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      - SPRING_DATASOURCE_USERNAME=${TRANSFER_DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${TRANSFER_DB_PASSWORD}
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     depends_on:
