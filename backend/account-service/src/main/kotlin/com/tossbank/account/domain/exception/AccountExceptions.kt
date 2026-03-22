@@ -1,3 +1,4 @@
+
 import com.tossbank.account.domain.exception.AccountErrorCode
 import com.tossbank.common.exception.CustomException
 
@@ -21,4 +22,10 @@ class TransferSameAccountException : CustomException(AccountErrorCode.TRANSFER_S
 class LockAcquisitionException : CustomException(AccountErrorCode.LOCK_ACQUISITION_FAILED)
 
 class ExternalTransferNotSupportedException : CustomException(AccountErrorCode.EXTERNAL_TRANSFER_NOT_SUPPORTED)
-class ExternalBankInquiryNotSupportedException : CustomException(AccountErrorCode.EXTERNAL_BANK_INQUIRY_NOT_SUPPORTED)
+class InvalidTransferStateTransitionException : CustomException(AccountErrorCode.INVALID_TRANSFER_STATE_TRANSITION)
+
+// 타행 이체 — 외부 응답
+class ExternalTransferFailedException : CustomException(AccountErrorCode.EXTERNAL_TRANSFER_FAILED)
+class ExternalTransferTimeoutException : CustomException(AccountErrorCode.EXTERNAL_TRANSFER_TIMEOUT,)
+class ExternalTransferServerErrorException : CustomException(AccountErrorCode.EXTERNAL_TRANSFER_SERVER_ERROR)
+class ExternalTransferUnknownException : CustomException(AccountErrorCode.EXTERNAL_TRANSFER_UNKNOWN)
