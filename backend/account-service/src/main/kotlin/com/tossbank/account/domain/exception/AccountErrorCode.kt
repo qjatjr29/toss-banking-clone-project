@@ -30,4 +30,10 @@ enum class AccountErrorCode(
     // 타행 관련 (추후 구현)
     EXTERNAL_TRANSFER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "A012", "타행 이체는 현재 지원하지 않습니다."),
     EXTERNAL_BANK_INQUIRY_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "A013", "타행 계좌 실명조회는 현재 지원하지 않습니다."),
+
+    INVALID_TRANSFER_STATE_TRANSITION(HttpStatus.INTERNAL_SERVER_ERROR, "A014", "이체 상태 전이가 올바르지 않습니다."),
+    EXTERNAL_TRANSFER_FAILED(HttpStatus.BAD_REQUEST, "A015", "타행 입금이 거절됐습니다."),
+    EXTERNAL_TRANSFER_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "A016", "타행 은행 응답이 지연되고 있습니다."),
+    EXTERNAL_TRANSFER_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "A017", "타행 은행 서버 오류가 발생했습니다."),
+    EXTERNAL_TRANSFER_UNKNOWN(HttpStatus.ACCEPTED, "A018", "이체 결과를 확인 중입니다. 완료되면 알림을 보내드릴게요."),
 }
