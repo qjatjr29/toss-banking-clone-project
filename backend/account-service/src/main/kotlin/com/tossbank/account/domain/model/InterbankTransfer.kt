@@ -138,7 +138,7 @@ class InterbankTransfer(
         }
 
     companion object {
-        const val MAX_RETRY_COUNT        = 10
+        const val MAX_RETRY_COUNT        = 5
         const val MAX_COMPENSATION_RETRY = 5
         // UNKNOWN 재조회: 30s → 2m → 5m → 15m → 30m
         private val UNKNOWN_BACKOFF_SECONDS =  listOf(30L, 120L, 300L, 900L, 1800L)
