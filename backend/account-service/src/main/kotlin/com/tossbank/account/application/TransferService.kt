@@ -1,7 +1,6 @@
 package com.tossbank.account.application
 
 import AccountNotFoundException
-import ExternalTransferNotSupportedException
 import TransferSameAccountException
 import com.tossbank.account.infrastructure.client.MemberClient
 import com.tossbank.account.infrastructure.lock.RedissonLockManager
@@ -26,58 +25,81 @@ class TransferService(
     @Qualifier("dbDispatcher") private val dbDispatcher: CoroutineDispatcher,
 ) {
 
+
+    suspend fun transfer(memberId: Long, request: TransferRequest): TransferResponse {
+        if (request.toBankCode != BankConstants.TOSS_BANK_CODE) {
+            return transferInterbank(memberId, request)
+        }
+        val fromMemberName = memberClient.getMemberName(memberId)
+        return transferInternal(memberId, request, fromMemberName)
+    }
+
+
     /**
      * 당행 이체
      *
-     * 동시성 제어 레이어:
-     *   1. withContext(dbDispatcher)     — Netty 이벤트 루프 블로킹 방지
-     *   2. Redisson MultiLock (분산 락)  — 앱 서버 인스턴스 간 요청 직렬화
-     *   3. @Transactional                — HikariCP 커넥션 획득 (락 획득 후 → 점유 최소화)
-     *   4. PESSIMISTIC_WRITE             — DB 레벨 최후 방어선
-     *
-     *   - fromMemberName: 트랜잭션 밖에서 MemberClient로 조회 (HTTP 호출의 DB 커넥션 점유 방지)
-     *   - toMemberName: 클라이언트가 계좌실명조회 후 request에 포함해서 전달
+     * 동시성 제어
+     *  withContext(dbDispatcher)  — Netty 이벤트 루프 블로킹 방지
+     *  Redisson MultiLock         — 앱 서버 인스턴스 간 요청 직렬화
+     *  @Transactional             — DB 커넥션 획득 (락 획득 후 → 점유 최소화)
+     *  PESSIMISTIC_WRITE
      */
-    suspend fun transfer(memberId: Long, request: TransferRequest): TransferResponse =
-        withContext(dbDispatcher) {
-            if (request.toBankCode != BankConstants.TOSS_BANK_CODE) {
-                // 타행 이체 — external-banking-service 위임 (추후 구현)
-                log.info { "타행 이체 요청: toBankCode=${request.toBankCode}" }
-                throw ExternalTransferNotSupportedException()
-            } else transferInternal(memberId, request);
-        }
-
-    // 당행 이체
-    private fun transferInternal(memberId: Long, request: TransferRequest): TransferResponse {
-
+    private suspend fun transferInternal(
+        memberId: Long,
+        request: TransferRequest,
+        fromMemberName: String,
+    ): TransferResponse = withContext(dbDispatcher) {
         val toAccount = accountRepository.findByAccountNumber(request.toAccountNumber)
             ?: throw AccountNotFoundException()
         val toAccountId = toAccount.id
 
-        if (request.fromAccountId == toAccountId) {
-            throw TransferSameAccountException()
-        }
+        if (request.fromAccountId == toAccountId) throw TransferSameAccountException()
 
-        // 송금인 이름 조회 — @Transactional 밖에서 실행
-        // - HTTP 호출 시 DB 커넥션을 점유하지 않도록 락 획득 전에 처리
-        val fromMemberName = memberClient.getMemberName(memberId)
-
-        log.info {
-            "이체 요청: memberId=$memberId from=${request.fromAccountId} " +
-                    "to=$toAccountId amount=${request.amount}"
-        }
-
-        // 분산 락 → 트랜잭션 → DB 락
-        return lockManager.withTransferLocks(
+        lockManager.withTransferLocks(
             accountId1 = request.fromAccountId,
             accountId2 = toAccountId,
         ) {
-            transferTransactionExecutor.execute(
-                memberId = memberId,
-                request = request,
-                toAccountId = toAccountId,
+            transferTransactionExecutor.executeInternalTransfer(
+                memberId       = memberId,
+                request        = request,
+                toAccountId    = toAccountId,
                 fromMemberName = fromMemberName,
             )
         }
+    }
+
+    /**
+     *  멱등성 체크
+     *  T1: 출금 (분산 락 → @Transactional → SELECT FOR UPDATE)
+     *  T2: 외부 은행 API 호출 (트랜잭션 밖 — 이슈 3에서 구현)
+     *  T2 성공(200)       → COMPLETED
+     *  T2 실패(4xx) → 보상 트랜잭션 → COMPENSATED
+     *  T2 불확실(5xx/TO)  → UNKNOWN (보상 트랜잭션 금지) → 입금 여부 확인 및 재시도
+     */
+    private suspend fun transferInterbank(memberId: Long, request: TransferRequest): TransferResponse {
+
+        //  출금, 이후 외부 API 호출 구간에서는 DB 커넥션 미점유
+        val response = withContext(dbDispatcher) {
+            lockManager.withSingleLock(request.fromAccountId) {
+                transferTransactionExecutor.executeInterbankWithdraw(
+                    memberId        = memberId,
+                    fromAccountId   = request.fromAccountId,
+                    toAccountNumber = request.toAccountNumber,
+                    toBankCode      = request.toBankCode,
+                    toMemberName    = request.toMemberName,
+                    amount          = request.amount,
+                    description     = request.description,
+                    idempotencyKey  = request.idempotencyKey,
+                )
+            }
+        }
+
+        // TODO: 외부 은행 API 호출
+        //  ExternalBankClient.transfer() + retryWithBackoff
+        //  성공  → response 반환
+        //  4xx  → 보상 트랜잭션 → 예외 throw
+        //  5xx  → UNKNOWN 저장 → 예외 throw
+
+        return response
     }
 }
