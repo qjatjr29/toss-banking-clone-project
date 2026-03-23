@@ -2,9 +2,11 @@ package com.tossbank.account.application
 
 import AccountNotFoundException
 import CompensationFailedException
+import ExternalTransferFailedException
 import InterbankTransferNotFoundException
 import com.tossbank.account.application.dto.InterbankTransferContext
 import com.tossbank.account.domain.model.InterbankTransfer
+import com.tossbank.account.domain.model.InterbankTransferStatus
 import com.tossbank.account.domain.model.TransactionHistory
 import com.tossbank.account.infrastructure.persistence.AccountRepository
 import com.tossbank.account.infrastructure.persistence.InterbankTransferRepository
@@ -125,22 +127,47 @@ class TransferTransactionExecutor(
         description: String?,
         idempotencyKey: String,
     ): InterbankTransferContext {
-        transactionHistoryRepository.findByIdempotencyKey(idempotencyKey)
+
+        interbankTransferRepository.findByIdempotencyKey(idempotencyKey)
             ?.let { existing ->
-                val interbankTransfer = interbankTransferRepository.findByIdempotencyKey(idempotencyKey)
-                    ?: throw IllegalStateException("InterbankTransfer 누락: $idempotencyKey")
-                return InterbankTransferContext(
-                    transferResponse    = TransferResponse(
-                        fromAccountId    = existing.accountId,
-                        toMemberName     = existing.counterpartName ?: toMemberName,
-                        amount           = existing.amount,
-                        remainingBalance = existing.balanceAfterTx,
-                    ),
-                    interbankTransferId = interbankTransfer.id,
-                    fromAccountId       = interbankTransfer.fromAccountId,
-                    fromAccountNumber   = interbankTransfer.fromAccountNumber,
-                )
+                when (existing.status) {
+                    // 성공 / 진행 중 → 기존 결과 반환 (재처리 금지)
+                    InterbankTransferStatus.WITHDRAW_COMPLETED,
+                    InterbankTransferStatus.COMPLETED,
+                    InterbankTransferStatus.UNKNOWN -> {
+                        log.warn { "중복 요청 — 기존 결과 반환: key=$idempotencyKey status=${existing.status}" }
+                        val history = transactionHistoryRepository.findByIdempotencyKey(idempotencyKey)
+                            ?: throw InterbankTransferNotFoundException()
+                        return InterbankTransferContext(
+                            transferResponse    = TransferResponse(
+                                fromAccountId    = existing.fromAccountId,
+                                toMemberName     = existing.toMemberName,
+                                amount           = existing.amount,
+                                remainingBalance = history.balanceAfterTx,
+                            ),
+                            interbankTransferId = existing.id,
+                            fromAccountId       = existing.fromAccountId,
+                            fromAccountNumber   = existing.fromAccountNumber,
+                        )
+                    }
+
+                    // 보상 완료 / 확정 실패 → idempotencyKey null 처리
+                    InterbankTransferStatus.COMPENSATED,
+                    InterbankTransferStatus.FAILED -> {
+                        log.info { "실패 건 재시도 허용: key=$idempotencyKey status=${existing.status}" }
+                    }
+
+                    // 보상 진행 중 → 완료 전 재시도 차단
+                    InterbankTransferStatus.COMPENSATION_PENDING,
+                    InterbankTransferStatus.MANUAL_REQUIRED -> {
+                        log.warn { "보상 진행 중 재시도 차단: key=$idempotencyKey status=${existing.status}" }
+                        throw ExternalTransferFailedException()
+                    }
+
+                    else -> {  }
+                }
             }
+
         val fromAccount = accountRepository.findByIdWithLock(fromAccountId)
             ?: throw AccountNotFoundException()
 
@@ -254,7 +281,7 @@ class TransferTransactionExecutor(
                     balanceAfterTx  = fromAccount.balance,
                     toAccountNumber = transfer.toAccountNumber,
                     toBankCode      = transfer.toBankCode,
-                    idempotencyKey  = transfer.idempotencyKey,
+                    idempotencyKey  = transfer.idempotencyKey!!,
                 )
             )
 
