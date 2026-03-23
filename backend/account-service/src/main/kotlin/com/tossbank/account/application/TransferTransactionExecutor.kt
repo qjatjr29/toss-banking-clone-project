@@ -169,4 +169,74 @@ class TransferTransactionExecutor(
             remainingBalance = fromAccount.balance,
         )
     }
+
+    @Transactional
+    fun markInterbankCompleted(interbankTransferId: Long, externalTxId: String) {
+        val transfer = findInterbankTransfer(interbankTransferId)
+        transfer.markCompleted(externalTxId)
+        log.info { "타행 이체 COMPLETED: id=$interbankTransferId externalTxId=$externalTxId" }
+    }
+
+    @Transactional
+    fun markInterbankUnknown(interbankTransferId: Long, errorMessage: String) {
+        val transfer = findInterbankTransfer(interbankTransferId)
+        transfer.markUnknown(errorMessage)
+        // ⚠️ 보상 트랜잭션 안함!! - 입금 여부 불확실 하기 때문.
+        // TODO: 외부 은행에 결과 재조회 후 처리.
+        log.error { "타행 이체 UNKNOWN: id=$interbankTransferId error=$errorMessage" }
+    }
+
+    /**
+     * 보상 트랜잭션
+     *
+     * 호출 시점
+     *  1. 외부 은행 API 4xx 반환시 → 이 메서드 직접 호출
+     *  2. COMPENSATION_PENDING 스케줄러 재시도 (보상 트랜잭션 스케줄러)
+     *
+     * 보상 트랜잭션 자체도 실패할 수 있음
+     *  → try/catch 로 잡아 COMPENSATION_PENDING + scheduleNextRetry
+     *  → MAX_RETRY 초과 시 MANUAL_REQUIRED + 개발자 알림(TODO)
+     */
+    @Transactional
+    fun compensateInterbank(interbankTransferId: Long) {
+        val transfer = findInterbankTransfer(interbankTransferId)
+
+        try {
+            val fromAccount = accountRepository.findByIdWithLock(transfer.fromAccountId)
+                ?: throw AccountNotFoundException()
+
+            fromAccount.deposit(transfer.amount)
+
+            transactionHistoryRepository.save(
+                TransactionHistory.ofInterbankWithdrawCancel(
+                    accountId       = fromAccount.id,
+                    amount          = transfer.amount,
+                    balanceAfterTx  = fromAccount.balance,
+                    toAccountNumber = transfer.toAccountNumber,
+                    toBankCode      = transfer.toBankCode,
+                    idempotencyKey  = transfer.idempotencyKey,
+                )
+            )
+
+            transfer.markCompensated()
+            log.warn { "보상 트랜잭션 완료(COMPENSATED): id=$interbankTransferId amount=${transfer.amount}" }
+
+        } catch (e: Exception) {
+            // 보상 자체가 실패 → DLQ(COMPENSATION_PENDING) + 스케줄러 재시도
+            if (transfer.isRetryExhausted()) {
+                transfer.markManualRequired("보상 재시도 한계 초과: ${e.message}")
+                // TODO: Slack 알림
+                log.error { "보상 재시도 한계 초과 MANUAL_REQUIRED: id=$interbankTransferId" }
+            } else {
+                transfer.markCompensationPending("보상 실패: ${e.message}")
+                log.error { "보상 실패 → COMPENSATION_PENDING 재시도 예정: id=$interbankTransferId retry=${transfer.retryCount}" }
+            }
+            throw e
+        }
+    }
+
+    private fun findInterbankTransfer(id: Long): InterbankTransfer =
+        interbankTransferRepository.findById(id).orElseThrow {
+            IllegalStateException("InterbankTransfer 조회 실패: id=$id")
+        }
 }
