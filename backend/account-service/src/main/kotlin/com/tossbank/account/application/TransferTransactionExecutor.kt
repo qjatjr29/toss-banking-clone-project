@@ -1,6 +1,7 @@
 package com.tossbank.account.application
 
 import AccountNotFoundException
+import com.tossbank.account.application.dto.InterbankTransferContext
 import com.tossbank.account.domain.model.InterbankTransfer
 import com.tossbank.account.domain.model.TransactionHistory
 import com.tossbank.account.infrastructure.persistence.AccountRepository
@@ -10,6 +11,7 @@ import com.tossbank.account.presentation.dto.TransferRequest
 import com.tossbank.account.presentation.dto.TransferResponse
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 
@@ -120,22 +122,28 @@ class TransferTransactionExecutor(
         amount: BigDecimal,
         description: String?,
         idempotencyKey: String,
-    ): TransferResponse {
+    ): InterbankTransferContext {
         transactionHistoryRepository.findByIdempotencyKey(idempotencyKey)
             ?.let { existing ->
-                log.warn { "타행 이체 중복 요청 — 기존 결과 반환: key=$idempotencyKey" }
-                return TransferResponse(
-                    fromAccountId    = existing.accountId,
-                    toMemberName     = existing.counterpartName ?: toMemberName,
-                    amount           = existing.amount,
-                    remainingBalance = existing.balanceAfterTx,
+                val interbankTransfer = interbankTransferRepository.findByIdempotencyKey(idempotencyKey)
+                    ?: throw IllegalStateException("InterbankTransfer 누락: $idempotencyKey")
+                return InterbankTransferContext(
+                    transferResponse    = TransferResponse(
+                        fromAccountId    = existing.accountId,
+                        toMemberName     = existing.counterpartName ?: toMemberName,
+                        amount           = existing.amount,
+                        remainingBalance = existing.balanceAfterTx,
+                    ),
+                    interbankTransferId = interbankTransfer.id,
+                    fromAccountId       = interbankTransfer.fromAccountId,
+                    fromAccountNumber   = interbankTransfer.fromAccountNumber,
                 )
             }
         val fromAccount = accountRepository.findByIdWithLock(fromAccountId)
             ?: throw AccountNotFoundException()
 
         fromAccount.verifyOwner(memberId)
-        fromAccount.withdraw(amount)  // 잔액 부족 시 InsufficientBalanceException
+        fromAccount.withdraw(amount)
 
         transactionHistoryRepository.save(
             TransactionHistory.ofInterbankWithdraw(
@@ -150,7 +158,7 @@ class TransferTransactionExecutor(
             )
         )
 
-        interbankTransferRepository.save(InterbankTransfer(
+        val interbankTransfer = interbankTransferRepository.save(InterbankTransfer(
             fromMemberId      = memberId,
             fromAccountId     = fromAccount.id,
             fromAccountNumber = fromAccount.accountNumber,
@@ -162,11 +170,16 @@ class TransferTransactionExecutor(
             idempotencyKey    = idempotencyKey,
         ).also { it.markWithdrawCompleted() })
 
-        return TransferResponse(
-            fromAccountId    = fromAccount.id,
-            toMemberName     = toMemberName,
-            amount           = amount,
-            remainingBalance = fromAccount.balance,
+        return InterbankTransferContext(
+            transferResponse    = TransferResponse(
+                fromAccountId    = fromAccount.id,
+                toMemberName     = toMemberName,
+                amount           = amount,
+                remainingBalance = fromAccount.balance,
+            ),
+            interbankTransferId = interbankTransfer.id,
+            fromAccountId       = fromAccount.id,
+            fromAccountNumber   = fromAccount.accountNumber,
         )
     }
 
@@ -184,6 +197,24 @@ class TransferTransactionExecutor(
         // ⚠️ 보상 트랜잭션 안함!! - 입금 여부 불확실 하기 때문.
         // TODO: 외부 은행에 결과 재조회 후 처리.
         log.error { "타행 이체 UNKNOWN: id=$interbankTransferId error=$errorMessage" }
+    }
+
+    /**
+     * REQUIRES_NEW — 메인 트랜잭션이 롤백되어도 독립적으로 커밋
+     * 보상 실패 상태(COMPENSATION_PENDING / MANUAL_REQUIRED)를 반드시 저장해야
+     * 스케줄러가 재시도할 수 있음
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    fun markCompensationFailed(interbankTransferId: Long, errorMessage: String) {
+        val transfer = findInterbankTransfer(interbankTransferId)
+        if (transfer.isRetryExhausted()) {
+            transfer.markManualRequired("보상 재시도 한계 초과: $errorMessage")
+            // TODO: Slack 알림
+            log.error { "보상 재시도 한계 초과 MANUAL_REQUIRED: id=$interbankTransferId" }
+        } else {
+            transfer.markCompensationPending("보상 실패: $errorMessage")
+            log.error { "보상 실패 → COMPENSATION_PENDING: id=$interbankTransferId retry=${transfer.retryCount}" }
+        }
     }
 
     /**
@@ -220,17 +251,8 @@ class TransferTransactionExecutor(
 
             transfer.markCompensated()
             log.warn { "보상 트랜잭션 완료(COMPENSATED): id=$interbankTransferId amount=${transfer.amount}" }
-
-        } catch (e: Exception) {
-            // 보상 자체가 실패 → DLQ(COMPENSATION_PENDING) + 스케줄러 재시도
-            if (transfer.isRetryExhausted()) {
-                transfer.markManualRequired("보상 재시도 한계 초과: ${e.message}")
-                // TODO: Slack 알림
-                log.error { "보상 재시도 한계 초과 MANUAL_REQUIRED: id=$interbankTransferId" }
-            } else {
-                transfer.markCompensationPending("보상 실패: ${e.message}")
-                log.error { "보상 실패 → COMPENSATION_PENDING 재시도 예정: id=$interbankTransferId retry=${transfer.retryCount}" }
-            }
+        }   catch (e: Exception) {
+            markCompensationFailed(interbankTransferId, e.message ?: "unknown error")
             throw e
         }
     }
