@@ -96,8 +96,20 @@ class InterbankTransferScheduler(
             return
         }
 
+        val idempotencyKey = transfer.idempotencyKey
+        if (idempotencyKey == null) {
+            log.error { "idempotencyKey null — 데이터 정합성 이상: id=${transfer.id}" }
+            withContext(Dispatchers.IO) {
+                transferTransactionExecutor.markInterbankManualRequired(
+                    interbankTransferId = transfer.id,
+                    errorMessage        = "idempotencyKey null — 데이터 정합성 이상",
+                )
+            }
+            return
+        }
+
         runCatching {
-            externalBankClient.inquireTransferResult(transfer.idempotencyKey) // 외부 은행 이체 확인
+            externalBankClient.inquireTransferResult(idempotencyKey) // 외부 은행 이체 확인
         }.onSuccess { response ->
             withContext(Dispatchers.IO) {
                 when (response.status) {
