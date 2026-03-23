@@ -37,7 +37,6 @@ abstract class IntegrationTestBase : BehaviorSpec() {
             registry.add("spring.datasource.username", mysqlContainer::getUsername)
             registry.add("spring.datasource.password", mysqlContainer::getPassword)
             registry.add("spring.jpa.hibernate.ddl-auto") { "update" }
-            registry.add("spring.jpa.hibernate.ddl-auto") { "update" }
 
             // Hibernate Show SQL 옵션을 켜서 로그에서 쿼리와 인덱스(제약조건) 생성 확인
             registry.add("spring.jpa.show-sql") { "true" }
