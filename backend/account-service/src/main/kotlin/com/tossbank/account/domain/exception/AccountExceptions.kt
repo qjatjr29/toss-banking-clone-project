@@ -20,9 +20,8 @@ class AccountHasRemainingBalanceException : CustomException(AccountErrorCode.ACC
 // 이체 예외
 class TransferSameAccountException : CustomException(AccountErrorCode.TRANSFER_SAME_ACCOUNT)
 class LockAcquisitionException : CustomException(AccountErrorCode.LOCK_ACQUISITION_FAILED)
-
-class ExternalTransferNotSupportedException : CustomException(AccountErrorCode.EXTERNAL_TRANSFER_NOT_SUPPORTED)
 class InvalidTransferStateTransitionException : CustomException(AccountErrorCode.INVALID_TRANSFER_STATE_TRANSITION)
+class InterbankTransferNotFoundException() : CustomException(AccountErrorCode.INTERBANK_TRANSFER_NOT_FOUND)
 
 // 타행 이체 — 외부 응답
 class ExternalBankApiException(
