@@ -2,6 +2,7 @@ package com.tossbank.account.application
 
 import AccountNotFoundException
 import CompensationFailedException
+import InterbankTransferNotFoundException
 import com.tossbank.account.application.dto.InterbankTransferContext
 import com.tossbank.account.domain.model.InterbankTransfer
 import com.tossbank.account.domain.model.TransactionHistory
@@ -196,8 +197,15 @@ class TransferTransactionExecutor(
         val transfer = findInterbankTransfer(interbankTransferId)
         transfer.markUnknown(errorMessage)
         // ⚠️ 보상 트랜잭션 안함!! - 입금 여부 불확실 하기 때문.
-        // TODO: 외부 은행에 결과 재조회 후 처리.
         log.error { "타행 이체 UNKNOWN: id=$interbankTransferId error=$errorMessage" }
+    }
+
+    @Transactional
+    fun markInterbankManualRequired(interbankTransferId: Long, errorMessage: String) {
+        val transfer = findInterbankTransfer(interbankTransferId)
+        transfer.markManualRequired(errorMessage)
+        // TODO: Slack 알림
+        log.error { "MANUAL_REQUIRED: id=$interbankTransferId" }
     }
 
     /**
@@ -258,8 +266,17 @@ class TransferTransactionExecutor(
         }
     }
 
+    // 스케줄러에서 UNKNOWN 재조회 실패 / PROCESSING 시 nextRetryAt 갱신
+    @Transactional
+    fun scheduleNextRetryForUnknown(
+        interbankTransferId : Long,
+        errorMessage        : String = "retry scheduled",
+    ) {
+        val transfer = findInterbankTransfer(interbankTransferId)
+        transfer.lastErrorMessage = errorMessage
+        transfer.scheduleNextRetry()
+    }
+
     private fun findInterbankTransfer(id: Long): InterbankTransfer =
-        interbankTransferRepository.findById(id).orElseThrow {
-            IllegalStateException("InterbankTransfer 조회 실패: id=$id")
-        }
+        interbankTransferRepository.findById(id).orElseThrow { InterbankTransferNotFoundException() }
 }
