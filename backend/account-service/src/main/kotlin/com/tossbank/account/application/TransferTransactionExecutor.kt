@@ -1,14 +1,17 @@
 package com.tossbank.account.application
 
 import AccountNotFoundException
+import com.tossbank.account.domain.model.InterbankTransfer
 import com.tossbank.account.domain.model.TransactionHistory
 import com.tossbank.account.infrastructure.persistence.AccountRepository
+import com.tossbank.account.infrastructure.persistence.InterbankTransferRepository
 import com.tossbank.account.infrastructure.persistence.TransactionHistoryRepository
 import com.tossbank.account.presentation.dto.TransferRequest
 import com.tossbank.account.presentation.dto.TransferResponse
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
 
 private val log = KotlinLogging.logger {}
 
@@ -16,10 +19,11 @@ private val log = KotlinLogging.logger {}
 class TransferTransactionExecutor(
     private val accountRepository: AccountRepository,
     private val transactionHistoryRepository: TransactionHistoryRepository,
+    private val interbankTransferRepository: InterbankTransferRepository,
 ) {
 
     @Transactional
-    fun execute(
+    fun executeInternalTransfer(
         memberId: Long,
         request: TransferRequest,
         toAccountId: Long,
@@ -102,6 +106,66 @@ class TransferTransactionExecutor(
             fromAccountId    = fromAccount.id,
             toMemberName     = request.toMemberName,
             amount           = request.amount,
+            remainingBalance = fromAccount.balance,
+        )
+    }
+
+    @Transactional
+    fun executeInterbankWithdraw(
+        memberId: Long,
+        fromAccountId: Long,
+        toAccountNumber: String,
+        toBankCode: String,
+        toMemberName: String,
+        amount: BigDecimal,
+        description: String?,
+        idempotencyKey: String,
+    ): TransferResponse {
+        transactionHistoryRepository.findByIdempotencyKey(idempotencyKey)
+            ?.let { existing ->
+                log.warn { "타행 이체 중복 요청 — 기존 결과 반환: key=$idempotencyKey" }
+                return TransferResponse(
+                    fromAccountId    = existing.accountId,
+                    toMemberName     = existing.counterpartName ?: toMemberName,
+                    amount           = existing.amount,
+                    remainingBalance = existing.balanceAfterTx,
+                )
+            }
+        val fromAccount = accountRepository.findByIdWithLock(fromAccountId)
+            ?: throw AccountNotFoundException()
+
+        fromAccount.verifyOwner(memberId)
+        fromAccount.withdraw(amount)  // 잔액 부족 시 InsufficientBalanceException
+
+        transactionHistoryRepository.save(
+            TransactionHistory.ofInterbankWithdraw(
+                accountId       = fromAccount.id,
+                amount          = amount,
+                balanceAfterTx  = fromAccount.balance,
+                toAccountNumber = toAccountNumber,
+                toMemberName    = toMemberName,
+                toBankCode      = toBankCode,
+                description     = description,
+                idempotencyKey  = idempotencyKey,
+            )
+        )
+
+        interbankTransferRepository.save(InterbankTransfer(
+            fromMemberId      = memberId,
+            fromAccountId     = fromAccount.id,
+            fromAccountNumber = fromAccount.accountNumber,
+            toAccountNumber   = toAccountNumber,
+            toBankCode        = toBankCode,
+            toMemberName      = toMemberName,
+            amount            = amount,
+            description       = description,
+            idempotencyKey    = idempotencyKey,
+        ).also { it.markWithdrawCompleted() })
+
+        return TransferResponse(
+            fromAccountId    = fromAccount.id,
+            toMemberName     = toMemberName,
+            amount           = amount,
             remainingBalance = fromAccount.balance,
         )
     }
