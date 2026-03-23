@@ -145,8 +145,16 @@ class TransferService(
                 e.isClientError -> {
                     // 4xx 확정 실패 → 보상 트랜잭션
                     log.warn { "타행 이체 4xx(${e.statusCode}) → 보상 트랜잭션: id=$interbankId" }
-                    withContext(dbDispatcher) {
-                        transferTransactionExecutor.compensateInterbank(interbankId)
+                    try {
+                        withContext(dbDispatcher) {
+                            transferTransactionExecutor.compensateInterbank(interbankId)
+                        }
+                    } catch (ce: CompensationFailedException) {
+                        // 보상 실패 → COMPENSATION_PENDING은 REQUIRES_NEW로 커밋
+                        // 스케줄러가 재시도 예정
+                        log.error(ce.cause) {
+                            "보상 트랜잭션 실패 → COMPENSATION_PENDING 스케줄러 재시도 예정: id=$interbankId"
+                        }
                     }
                     throw ExternalTransferFailedException()
                 }
@@ -160,14 +168,6 @@ class TransferService(
                     throw ExternalTransferUnknownException()
                 }
             }
-        } catch (e: ExternalTransferFailedException) {
-            throw e  // 보상 트랜잭션 후 이미 throw된 예외 - 그대로 전파
-
-        } catch (e: CompensationFailedException) {
-            // 보상 트랜잭션 실패
-            log.error(e.cause) { "보상 트랜잭션 실패 → COMPENSATION_PENDING 스케줄러 재시도 예정: id=$interbankId" }
-            throw ExternalTransferFailedException()  // 사용자에게 "이체 실패" 응답
-
         }catch (e: Exception) {
             // 네트워크 단절 등 예상치 못한 예외 → 결과 불확실 → UNKNOWN
             log.error(e) { "타행 이체 예상치 못한 예외 → UNKNOWN: id=$interbankId" }
