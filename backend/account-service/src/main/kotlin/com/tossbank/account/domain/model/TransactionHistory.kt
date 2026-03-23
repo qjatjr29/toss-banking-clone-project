@@ -110,12 +110,43 @@ class TransactionHistory(
             description              = description,
             idempotencyKey           = idempotencyKey,
         )
-    }
-}
 
-enum class TransactionType {
-    DEPOSIT,    // 입금
-    WITHDRAWAL, // 출금
-    TRANSFER,   // 이체 (출금)
-    TRANSFER_IN // 이체 (입금)
+        fun ofInterbankWithdraw(
+            accountId: Long,
+            amount: BigDecimal,
+            balanceAfterTx: BigDecimal,
+            toAccountNumber: String,
+            toMemberName: String,
+            toBankCode: String,
+            description: String?,
+            idempotencyKey: String,
+        ) = TransactionHistory(
+            accountId                = accountId,
+            transactionType          = TransactionType.INTERBANK_WITHDRAW,
+            amount                   = amount,
+            balanceAfterTx           = balanceAfterTx,
+            counterpartAccountNumber = toAccountNumber,
+            counterpartName          = toMemberName,
+            description              = "[${toBankCode}] ${description ?: "타행 이체"}",
+            idempotencyKey           = idempotencyKey,
+        )
+
+        fun ofInterbankWithdrawCancel(
+            accountId: Long,
+            amount: BigDecimal,
+            balanceAfterTx: BigDecimal,
+            toAccountNumber: String,
+            toBankCode: String,
+            idempotencyKey: String,
+        ) = TransactionHistory(
+            accountId                = accountId,
+            transactionType          = TransactionType.INTERBANK_WITHDRAW_CANCEL,
+            amount                   = amount,
+            balanceAfterTx           = balanceAfterTx,
+            counterpartAccountNumber = toAccountNumber,
+            description              = "[${toBankCode}] 타행 이체 취소",
+            // 보상 트랜잭션은 원본 키에 "-cancel" suffix
+            idempotencyKey           = "$idempotencyKey-cancel",
+        )
+    }
 }
