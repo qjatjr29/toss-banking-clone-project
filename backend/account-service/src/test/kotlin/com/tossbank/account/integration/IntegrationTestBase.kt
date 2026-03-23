@@ -3,6 +3,7 @@ package com.tossbank.account.integration
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.extensions.spring.SpringExtension
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -13,6 +14,7 @@ import org.testcontainers.containers.MySQLContainer
     classes = [com.tossbank.account.AccountServiceApplication::class],
     webEnvironment = SpringBootTest.WebEnvironment.NONE
 )
+@Import(TestMockBeans::class)
 @ActiveProfiles("test")
 abstract class IntegrationTestBase : BehaviorSpec() {
     override fun extensions() = listOf(SpringExtension)
