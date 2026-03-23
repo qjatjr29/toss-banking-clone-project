@@ -1,6 +1,7 @@
 package com.tossbank.account.application
 
 import AccountNotFoundException
+import CompensationFailedException
 import com.tossbank.account.application.dto.InterbankTransferContext
 import com.tossbank.account.domain.model.InterbankTransfer
 import com.tossbank.account.domain.model.TransactionHistory
@@ -253,7 +254,7 @@ class TransferTransactionExecutor(
             log.warn { "보상 트랜잭션 완료(COMPENSATED): id=$interbankTransferId amount=${transfer.amount}" }
         }   catch (e: Exception) {
             markCompensationFailed(interbankTransferId, e.message ?: "unknown error")
-            throw e
+            throw CompensationFailedException(e)
         }
     }
 
