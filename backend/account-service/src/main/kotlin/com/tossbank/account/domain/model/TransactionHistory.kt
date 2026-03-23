@@ -44,7 +44,7 @@ class TransactionHistory(
     val counterpartName: String? = null,
 
     @Column(name = "idempotency_key", length = 64, unique = true)
-    val idempotencyKey: String? = null,
+    var idempotencyKey: String? = null,
 
     @Column(nullable = false, length = 100)
     val description: String,
@@ -148,5 +148,9 @@ class TransactionHistory(
             // 보상 트랜잭션은 원본 키에 "-cancel" suffix
             idempotencyKey           = "$idempotencyKey-cancel",
         )
+    }
+
+    fun releaseIdempotencyKey() {
+        this.idempotencyKey = null
     }
 }

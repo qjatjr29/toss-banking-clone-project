@@ -272,7 +272,13 @@ class TransferTransactionExecutor(
             val fromAccount = accountRepository.findByIdWithLock(transfer.fromAccountId)
                 ?: throw AccountNotFoundException()
 
+            val idempotencyKey = transfer.idempotencyKey
+                ?: throw IllegalStateException("idempotencyKey가 null인 건은 보상 처리 불가: id=$interbankTransferId")
+
+
             fromAccount.deposit(transfer.amount)
+            transactionHistoryRepository.findByIdempotencyKey(idempotencyKey)
+                ?.releaseIdempotencyKey()
 
             transactionHistoryRepository.save(
                 TransactionHistory.ofInterbankWithdrawCancel(
@@ -281,7 +287,7 @@ class TransferTransactionExecutor(
                     balanceAfterTx  = fromAccount.balance,
                     toAccountNumber = transfer.toAccountNumber,
                     toBankCode      = transfer.toBankCode,
-                    idempotencyKey  = transfer.idempotencyKey!!,
+                    idempotencyKey  = idempotencyKey,
                 )
             )
 
