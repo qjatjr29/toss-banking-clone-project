@@ -43,8 +43,8 @@ class InterbankTransfer(
     val description: String?,
 
     // 멱등성 키 - 외부 은행 API 호출 시 헤더 값으로 전달
-    @Column(name = "idempotency_key", nullable = false, length = 100, unique = true)
-    val idempotencyKey: String,
+    @Column(name = "idempotency_key", nullable = true, length = 100, unique = true)
+    var idempotencyKey: String? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -88,6 +88,7 @@ class InterbankTransfer(
 
     fun markCompensated() {
         status = InterbankTransferStatus.COMPENSATED
+        idempotencyKey = null  // UNIQUE 제약 해제 → 동일 키로 새 이체 가능
     }
 
     // 타행 입금 시 5xx/timeout 상황
