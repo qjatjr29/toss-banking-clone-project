@@ -92,6 +92,9 @@ services:
     container_name: toss-api-gateway
     ports:
       - "8080:8080"
+    depends_on:
+      - account-service
+      - transfer-service
     networks:
       - toss-network
 
@@ -104,24 +107,6 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/toss_account?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
       - SPRING_DATASOURCE_USERNAME=${ACCOUNT_DB_USER}
       - SPRING_DATASOURCE_PASSWORD=${ACCOUNT_DB_PASSWORD}
-      - SPRING_DATA_REDIS_HOST=redis
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - toss-network
-
-  transfer-service:
-    image: tossbank/transfer-service:1.0.0
-    container_name: toss-transfer-service
-    ports:
-      - "8082:8082"
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/toss_transfer?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
-      - SPRING_DATASOURCE_USERNAME=${TRANSFER_DB_USER}
-      - SPRING_DATASOURCE_PASSWORD=${TRANSFER_DB_PASSWORD}
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     depends_on:
@@ -141,6 +126,31 @@ services:
       - "8083:8083"
     networks:
       - toss-network
+
+  transfer-service:
+    image: tossbank/transfer-service:1.0.0
+    container_name: toss-transfer-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/toss_transfer?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      - SPRING_DATASOURCE_USERNAME=${TRANSFER_DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${TRANSFER_DB_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - EXTERNAL_BANKING_BASE_URL=http://external-banking-service:8083
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      external-banking-service:
+        condition: service_started
+    networks:
+      - toss-network
+
 volumes:
   mysql_data:
   kafka_data:
