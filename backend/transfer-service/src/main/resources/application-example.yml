@@ -5,9 +5,9 @@ spring:
   application:
     name: transfer-service
   datasource:
-    url: jdbc:mysql://{DB_HOST}:{DB_PORT}/{DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
-    username: { USERNAME }
-    password: { PASSWORD }
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/toss_transfer?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -17,14 +17,16 @@ spring:
     show-sql: true
   data:
     redis:
-      host: { REDIS_HOST }
-      port: { REDIS_PORT }
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
   kafka:
-    bootstrap-servers: { KAFKA_HOST }:{KAFKA_PORT}
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all # 전송 보장
+      enable-idempotence: true
+      retries: 3
     consumer:
       group-id: transfer-saga-group
       auto-offset-reset: earliest
@@ -32,3 +34,7 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+
+external-banking:
+  base-url: ${EXTERNAL_BANKING_BASE_URL:http://localhost:8083}
+  timeout-seconds: 10
