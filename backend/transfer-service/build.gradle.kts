@@ -4,7 +4,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-//    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
 
     // MySQL & JPA
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
