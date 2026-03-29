@@ -2,8 +2,10 @@ package com.tossbank.account.presentation.controller
 
 import com.tossbank.account.application.AccountQueryService
 import com.tossbank.account.application.TransactionHistoryQueryService
-import com.tossbank.account.application.TransferService
-import com.tossbank.account.presentation.dto.*
+import com.tossbank.account.presentation.dto.AccountHolderResponse
+import com.tossbank.account.presentation.dto.AccountResponse
+import com.tossbank.account.presentation.dto.SliceResponse
+import com.tossbank.account.presentation.dto.TransactionHistoryResponse
 import com.tossbank.common.response.ApiResponse
 import org.springframework.web.bind.annotation.*
 
@@ -12,7 +14,6 @@ import org.springframework.web.bind.annotation.*
 class AccountController(
     private val accountQueryService: AccountQueryService,
     private val transactionHistoryQueryService: TransactionHistoryQueryService,
-    private val transferService: TransferService,
 ) {
     @GetMapping()
     suspend fun getMyAccounts(
@@ -56,11 +57,4 @@ class AccountController(
             )
         )
     }
-
-    @PostMapping("/transfer")
-    suspend fun transfer(
-        @RequestHeader("X-User-Id") memberId: Long,
-        @RequestBody request: TransferRequest,
-    ): ApiResponse<TransferResponse> =
-        ApiResponse.success(transferService.transfer(memberId, request))
 }
