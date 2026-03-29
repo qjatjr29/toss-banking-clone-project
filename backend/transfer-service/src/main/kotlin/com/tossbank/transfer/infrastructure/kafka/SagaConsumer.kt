@@ -1,6 +1,5 @@
 package com.tossbank.transfer.infrastructure.kafka
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.tossbank.transfer.application.service.InternalTransferSagaOrchestrator
 import com.tossbank.transfer.domain.model.InternalTransferSagaStatus
 import com.tossbank.transfer.infrastructure.client.AccountServiceClient
@@ -16,6 +15,7 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
+import tools.jackson.databind.ObjectMapper
 
 private val log = KotlinLogging.logger {}
 

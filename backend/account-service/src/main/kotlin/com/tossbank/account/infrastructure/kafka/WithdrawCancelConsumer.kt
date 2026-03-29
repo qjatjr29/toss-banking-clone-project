@@ -1,6 +1,5 @@
 package com.tossbank.account.infrastructure.kafka
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.tossbank.account.application.WithdrawCancelExecutor
 import com.tossbank.account.infrastructure.kafka.dto.WithdrawCancelMessage
 import com.tossbank.account.infrastructure.lock.RedissonLockManager
@@ -9,6 +8,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.stereotype.Component
+import tools.jackson.databind.ObjectMapper
 
 private val log = KotlinLogging.logger {}
 
