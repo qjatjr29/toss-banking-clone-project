@@ -5,15 +5,10 @@ import CompensationFailedException
 import ExternalBankApiException
 import ExternalTransferFailedException
 import ExternalTransferUnknownException
-import TransferSameAccountException
 import com.tossbank.account.application.dto.InterbankTransferContext
-import com.tossbank.account.domain.model.Account
-import com.tossbank.account.domain.model.AccountStatus
 import com.tossbank.account.infrastructure.client.ExternalBankClient
-import com.tossbank.account.infrastructure.client.MemberClient
 import com.tossbank.account.infrastructure.client.dto.ExternalTransferResponse
 import com.tossbank.account.infrastructure.lock.RedissonLockManager
-import com.tossbank.account.infrastructure.persistence.AccountRepository
 import com.tossbank.account.presentation.dto.TransferRequest
 import com.tossbank.account.presentation.dto.TransferResponse
 import io.kotest.assertions.throwables.shouldThrow
@@ -28,40 +23,18 @@ class TransferServiceTest : BehaviorSpec({
 
     isolationMode = IsolationMode.InstancePerLeaf
 
-    val accountRepository           = mockk<AccountRepository>()
     val lockManager                 = mockk<RedissonLockManager>()
     val transferTransactionExecutor = mockk<TransferTransactionExecutor>()
-    val memberClient                = mockk<MemberClient>()
     val externalBankClient          = mockk<ExternalBankClient>()
 
     val service = TransferService(
-        accountRepository           = accountRepository,
         lockManager                 = lockManager,
         transferTransactionExecutor = transferTransactionExecutor,
-        memberClient                = memberClient,
         externalBankClient          = externalBankClient,
         dbDispatcher                = Dispatchers.Unconfined,
     )
 
     afterTest { clearAllMocks() }
-
-    fun makeAccount(
-        id: Long              = 1L,
-        memberId: Long        = 1L,
-        accountNumber: String = "1002-000-000001",
-        status: AccountStatus = AccountStatus.ACTIVE,
-    ) = Account(
-        memberId      = memberId,
-        accountNumber = accountNumber,
-        holderName    = "김토스",
-        balance       = BigDecimal("100000"),
-        status        = status,
-    ).also {
-        Account::class.java.getDeclaredField("id").apply {
-            isAccessible = true
-            set(it, id)
-        }
-    }
 
     fun makeRequest(
         fromAccountId: Long     = 1L,
@@ -116,19 +89,6 @@ class TransferServiceTest : BehaviorSpec({
         every { message } returns "Internal Server Error"
     }
 
-    // lockManager 셋업 헬퍼
-    fun setupTransferLock() {
-        every {
-            lockManager.withTransferLocks<TransferResponse>(
-                accountId1   = any(),
-                accountId2   = any(),
-                waitSeconds  = any(),
-                leaseSeconds = any(),
-                block        = any(),
-            )
-        } answers { arg<() -> TransferResponse>(4)() }
-    }
-
     fun setupSingleLock() {
         every {
             lockManager.withSingleLock<InterbankTransferContext>(
@@ -138,105 +98,6 @@ class TransferServiceTest : BehaviorSpec({
                 block        = any(),
             )
         } answers { lastArg<() -> InterbankTransferContext>()() }
-    }
-
-    Given("당행 이체 - 정상 이체") {
-        val toAccount    = makeAccount(id = 2L, accountNumber = "1002-000-000002")
-        val mockResponse = TransferResponse(
-            fromAccountId    = 1L,
-            toMemberName     = "박토스",
-            amount           = BigDecimal("10000"),
-            remainingBalance = BigDecimal("90000"),
-        )
-        val request = makeRequest()
-
-        every { memberClient.getMemberName(1L) } returns "김토스"
-        every { accountRepository.findByAccountNumber("1002-000-000002") } returns toAccount
-        setupTransferLock()
-        every {
-            transferTransactionExecutor.executeInternalTransfer(
-                memberId = 1L, request = request, toAccountId = 2L, fromMemberName = "김토스",
-            )
-        } returns mockResponse
-
-        When("transfer를 호출하면") {
-            Then("TransferResponse가 정상 반환된다") {
-                val result = service.transfer(1L, request)
-                result.fromAccountId    shouldBe 1L
-                result.toMemberName     shouldBe "박토스"
-                result.amount           shouldBe BigDecimal("10000")
-                result.remainingBalance shouldBe BigDecimal("90000")
-            }
-            Then("memberClient로 송금인 이름을 조회한다") {
-                service.transfer(1L, request)
-                verify(exactly = 1) { memberClient.getMemberName(1L) }
-            }
-            Then("MultiLock으로 양측 계좌 락을 획득한다") {
-                service.transfer(1L, request)
-                verify(exactly = 1) {
-                    lockManager.withTransferLocks<TransferResponse>(
-                        accountId1 = 1L, accountId2 = 2L,
-                        waitSeconds = any(), leaseSeconds = any(), block = any(),
-                    )
-                }
-            }
-            Then("executeInternalTransfer가 정확한 인자로 호출된다") {
-                service.transfer(1L, request)
-                verify(exactly = 1) {
-                    transferTransactionExecutor.executeInternalTransfer(
-                        memberId = 1L, request = request, toAccountId = 2L, fromMemberName = "김토스",
-                    )
-                }
-            }
-            Then("externalBankClient를 호출하지 않는다") {
-                service.transfer(1L, request)
-                coVerify(exactly = 0) { externalBankClient.transfer(any()) }
-            }
-        }
-    }
-
-    Given("당행 이체 - 존재하지 않는 수취 계좌") {
-        val request = makeRequest(toAccountNumber = "9999-000-000000")
-        every { memberClient.getMemberName(1L) } returns "김토스"
-        every { accountRepository.findByAccountNumber("9999-000-000000") } returns null
-
-        When("transfer를 호출하면") {
-            Then("AccountNotFoundException이 발생한다") {
-                shouldThrow<AccountNotFoundException> { service.transfer(1L, request) }
-            }
-            Then("분산 락을 획득하지 않는다") {
-                runCatching { service.transfer(1L, request) }
-                verify(exactly = 0) {
-                    lockManager.withTransferLocks<TransferResponse>(any(), any(), any(), any(), any())
-                }
-            }
-            Then("executeInternalTransfer를 호출하지 않는다") {
-                runCatching { service.transfer(1L, request) }
-                verify(exactly = 0) {
-                    transferTransactionExecutor.executeInternalTransfer(any(), any(), any(), any())
-                }
-            }
-        }
-    }
-
-    Given("당행 이체 - 출금/수취 계좌 동일") {
-        val request     = makeRequest(fromAccountId = 1L, toAccountNumber = "1002-000-000001")
-        val sameAccount = makeAccount(id = 1L, accountNumber = "1002-000-000001")
-
-        every { memberClient.getMemberName(1L) } returns "김토스"
-        every { accountRepository.findByAccountNumber("1002-000-000001") } returns sameAccount
-
-        When("transfer를 호출하면") {
-            Then("TransferSameAccountException이 발생한다") {
-                shouldThrow<TransferSameAccountException> { service.transfer(1L, request) }
-            }
-            Then("분산 락을 획득하지 않는다") {
-                runCatching { service.transfer(1L, request) }
-                verify(exactly = 0) {
-                    lockManager.withTransferLocks<TransferResponse>(any(), any(), any(), any(), any())
-                }
-            }
-        }
     }
 
     Given("타행 이체 - 출금 계좌 없음") {
@@ -533,14 +394,6 @@ class TransferServiceTest : BehaviorSpec({
         every { transferTransactionExecutor.markInterbankCompleted(any(), any()) } just Runs
 
         When("transfer를 호출하면") {
-            Then("memberClient를 호출하지 않는다") {
-                service.transfer(1L, request)
-                verify(exactly = 0) { memberClient.getMemberName(any()) }
-            }
-            Then("수취 계좌 조회를 하지 않는다 (당행 계좌 조회 불필요)") {
-                service.transfer(1L, request)
-                verify(exactly = 0) { accountRepository.findByAccountNumber(any()) }
-            }
             Then("MultiLock이 아닌 SingleLock을 사용한다") {
                 service.transfer(1L, request)
                 verify(exactly = 1) {

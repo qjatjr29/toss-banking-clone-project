@@ -1,19 +1,14 @@
 package com.tossbank.account.integration
 
-import AccountNotFoundException
 import ExternalBankApiException
 import ExternalTransferFailedException
 import ExternalTransferUnknownException
-import InsufficientBalanceException
-import TransferSameAccountException
-import UnauthorizedAccountAccessException
 import com.tossbank.account.application.TransferService
 import com.tossbank.account.domain.model.Account
 import com.tossbank.account.domain.model.AccountStatus
 import com.tossbank.account.domain.model.InterbankTransferStatus
 import com.tossbank.account.domain.model.TransactionType
 import com.tossbank.account.infrastructure.client.ExternalBankClient
-import com.tossbank.account.infrastructure.client.MemberClient
 import com.tossbank.account.infrastructure.client.dto.ExternalTransferResponse
 import com.tossbank.account.infrastructure.client.dto.ExternalTransferResultStatus
 import com.tossbank.account.infrastructure.persistence.AccountRepository
@@ -26,7 +21,6 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.clearAllMocks
 import io.mockk.coEvery
-import io.mockk.every
 import org.springframework.beans.factory.annotation.Autowired
 import java.math.BigDecimal
 import java.util.*
@@ -37,7 +31,6 @@ class TransferServiceIntegrationTest : IntegrationTestBase() {
     @Autowired lateinit var accountRepository: AccountRepository
     @Autowired lateinit var transactionHistoryRepository: TransactionHistoryRepository
     @Autowired lateinit var interbankTransferRepository: InterbankTransferRepository
-    @Autowired lateinit var memberClient: MemberClient
     @Autowired lateinit var externalBankClient: ExternalBankClient
 
     fun createAccount(memberId: Long, balance: BigDecimal, accountNumber: String) =
@@ -94,115 +87,6 @@ class TransferServiceIntegrationTest : IntegrationTestBase() {
     }
 
     init {
-
-        Given("당행 이체 - 정상 이체") {
-
-            When("정상 이체를 실행하면") {
-                Then("응답·DB 잔액·거래내역이 모두 정확히 반영된다") {
-                    every { memberClient.getMemberName(1L) } returns "김토스"
-
-                    val from = createAccount(1L, BigDecimal("100000"), "1002-001-000001")
-                    val to   = createAccount(2L, BigDecimal("50000"),  "1002-001-000002")
-                    val req  = internalRequest(from.id, to.accountNumber, BigDecimal("30000"))
-
-                    val result = transferService.transfer(1L, req)
-
-                    result.fromAccountId    shouldBe from.id
-                    result.amount           shouldBeEqualComparingTo BigDecimal("30000")
-                    result.remainingBalance shouldBeEqualComparingTo BigDecimal("70000")
-
-                    accountRepository.findById(from.id).get().balance shouldBeEqualComparingTo BigDecimal("70000")
-                    accountRepository.findById(to.id).get().balance   shouldBeEqualComparingTo BigDecimal("80000")
-
-                    transactionHistoryRepository.findAll()
-                        .filter { it.accountId == from.id || it.accountId == to.id }
-                        .size shouldBe 2
-                }
-            }
-
-            When("잔액이 부족한 계좌에서 이체하면") {
-                Then("InsufficientBalanceException 발생 + 양 계좌 잔액 불변") {
-                    every { memberClient.getMemberName(3L) } returns "김토스"
-
-                    val from = createAccount(3L, BigDecimal("5000"),  "1002-001-000003")
-                    val to   = createAccount(4L, BigDecimal("10000"), "1002-001-000004")
-                    val req  = internalRequest(from.id, to.accountNumber, BigDecimal("10000"))
-
-                    shouldThrow<InsufficientBalanceException> { transferService.transfer(3L, req) }
-
-                    accountRepository.findById(from.id).get().balance shouldBeEqualComparingTo BigDecimal("5000")
-                    accountRepository.findById(to.id).get().balance   shouldBeEqualComparingTo BigDecimal("10000")
-                }
-            }
-
-            When("존재하지 않는 수취 계좌로 이체하면") {
-                Then("AccountNotFoundException 발생 + 출금 계좌 잔액 불변") {
-                    // getMemberName이 findByAccountNumber보다 먼저 호출되므로 mock 필요
-                    every { memberClient.getMemberName(5L) } returns "김토스"
-
-                    val from = createAccount(5L, BigDecimal("100000"), "1002-001-000005")
-                    val req  = internalRequest(from.id, "9999-999-999999", BigDecimal("10000"))
-
-                    shouldThrow<AccountNotFoundException> { transferService.transfer(5L, req) }
-                    accountRepository.findById(from.id).get().balance shouldBeEqualComparingTo BigDecimal("100000")
-                }
-            }
-
-            When("동일 계좌로 이체하면") {
-                Then("TransferSameAccountException이 발생한다") {
-                    // getMemberName이 동일 계좌 검증보다 먼저 호출되므로 mock 필요
-                    every { memberClient.getMemberName(6L) } returns "김토스"
-
-                    val account = createAccount(6L, BigDecimal("100000"), "1002-001-000006")
-                    val req     = internalRequest(account.id, account.accountNumber, BigDecimal("10000"))
-
-                    shouldThrow<TransferSameAccountException> { transferService.transfer(6L, req) }
-                }
-            }
-
-            When("타인의 계좌에서 이체하면") {
-                Then("UnauthorizedAccountAccessException이 발생한다") {
-                    // 요청자 memberId = 99L 기준으로 getMemberName 호출
-                    every { memberClient.getMemberName(99L) } returns "해커"
-
-                    val from = createAccount(7L, BigDecimal("100000"), "1002-001-000007")
-                    val to   = createAccount(8L, BigDecimal("50000"),  "1002-001-000008")
-                    val req  = internalRequest(from.id, to.accountNumber, BigDecimal("10000"))
-
-                    shouldThrow<UnauthorizedAccountAccessException> {
-                        transferService.transfer(99L, req)   // 소유자=7L, 요청자=99L
-                    }
-                }
-            }
-        }
-
-        Given("당행 이체 - 멱등성") {
-
-            When("동일 idempotencyKey로 2번 요청하면") {
-                Then("잔액 1번만 차감 + 거래내역 2건만 저장") {
-                    every { memberClient.getMemberName(10L) } returns "김토스"
-
-                    val from = createAccount(10L, BigDecimal("100000"), "1002-002-000001")
-                    val to   = createAccount(11L, BigDecimal("50000"),  "1002-002-000002")
-                    val req  = internalRequest(
-                        from.id, to.accountNumber, BigDecimal("20000"),
-                        idempotencyKey = "idem-key-internal-001"
-                    )
-
-                    transferService.transfer(10L, req)
-                    val second = transferService.transfer(10L, req)
-
-                    second.amount           shouldBeEqualComparingTo BigDecimal("20000")
-                    second.remainingBalance shouldBeEqualComparingTo BigDecimal("80000")
-                    accountRepository.findById(from.id).get().balance shouldBeEqualComparingTo BigDecimal("80000")
-
-                    transactionHistoryRepository.findAll()
-                        .filter { it.accountId == from.id || it.accountId == to.id }
-                        .size shouldBe 2
-                }
-            }
-        }
-
         // ══════════════════════════════════════════════════════
         // 타행 이체 — transferInterbank() 분기로 진입
         //            memberClient 호출 없음 → mock 불필요
