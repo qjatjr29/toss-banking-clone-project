@@ -17,8 +17,6 @@ class TestMockBeans {
     @Bean @Primary
     fun kafkaTemplate(): KafkaTemplate<String, String> = mockk(relaxed = true)
 
-
-
     @Bean
     fun objectMapper(): JsonMapper =
         JsonMapper.builder()
