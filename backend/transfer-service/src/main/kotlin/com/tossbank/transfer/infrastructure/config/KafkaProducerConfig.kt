@@ -3,6 +3,7 @@ package com.tossbank.transfer.infrastructure.config
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.core.DefaultKafkaProducerFactory
@@ -27,6 +28,7 @@ class KafkaProducerConfig(
         )
 
     @Bean
+    @ConditionalOnMissingBean(name = ["kafkaTemplate"])
     fun kafkaTemplate(): KafkaTemplate<String, String> =
         KafkaTemplate(producerFactory())
 }

@@ -1,4 +1,4 @@
-package com.tossbank.account.infrastructure.client
+package com.tossbank.transfer.infrastructure.client
 
 import org.springframework.stereotype.Component
 

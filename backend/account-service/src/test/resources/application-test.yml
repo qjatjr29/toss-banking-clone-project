@@ -1,0 +1,13 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092   # 실제 연결 안 하므로 값은 무관
+    listener:
+      auto-startup: false               #  Consumer가 Kafka에 연결 시도 안 함
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+# 테스트에서 불필요한 스케줄러 비활성화 (선택)
+scheduling:
+  enabled: false

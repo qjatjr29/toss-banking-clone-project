@@ -41,7 +41,7 @@ subprojects {
 		implementation("org.jetbrains.kotlin:kotlin-reflect")
 		implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 		implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-		implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+		implementation("tools.jackson.module:jackson-module-kotlin")
 
 		// Logging
 		implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")

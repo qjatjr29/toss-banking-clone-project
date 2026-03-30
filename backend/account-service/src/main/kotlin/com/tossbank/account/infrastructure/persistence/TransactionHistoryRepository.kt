@@ -8,4 +8,5 @@ import org.springframework.data.jpa.repository.JpaRepository
 interface TransactionHistoryRepository : JpaRepository<TransactionHistory, Long> {
     fun findByAccountIdOrderByCreatedAtDesc(accountId: Long, pageable: Pageable): Slice<TransactionHistory>
     fun findByIdempotencyKey(idempotencyKey: String): TransactionHistory?
+    fun existsByIdempotencyKey(idempotencyKey: String): Boolean
 }

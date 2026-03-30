@@ -38,3 +38,9 @@ spring:
 external-banking:
   base-url: ${EXTERNAL_BANKING_BASE_URL:http://localhost:8083}
   timeout-seconds: 10
+
+kafka:
+  topics:
+    withdraw-inquiry: transfer.withdraw.inquiry
+    deposit-inquiry: transfer.deposit.inquiry
+    compensate-withdraw: transfer.compensate.withdraw

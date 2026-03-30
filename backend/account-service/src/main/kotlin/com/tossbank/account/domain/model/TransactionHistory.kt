@@ -148,6 +148,51 @@ class TransactionHistory(
             // 보상 트랜잭션은 원본 키에 "-cancel" suffix
             idempotencyKey           = "$idempotencyKey-cancel",
         )
+
+        fun ofInternalWithdraw(
+            accountId: Long,
+            amount: BigDecimal,
+            balanceAfterTx: BigDecimal,
+            idempotencyKey: String,
+        ) = TransactionHistory(
+            accountId       = accountId,
+            transactionType = TransactionType.TRANSFER,      // 기존 타입 재사용
+            amount          = amount,
+            balanceAfterTx  = balanceAfterTx,
+            description     = "이체 출금",
+            idempotencyKey  = idempotencyKey,
+        )
+
+        fun ofInternalDeposit(
+            accountId: Long,
+            amount: BigDecimal,
+            balanceAfterTx: BigDecimal,
+            fromMemberName: String,
+            description: String?,
+            idempotencyKey: String,
+        ) = TransactionHistory(
+            accountId       = accountId,
+            transactionType = TransactionType.TRANSFER_IN,
+            amount          = amount,
+            balanceAfterTx  = balanceAfterTx,
+            counterpartName = fromMemberName,
+            description     = description ?: "${fromMemberName}으로부터 입금",
+            idempotencyKey  = idempotencyKey,
+        )
+
+        fun ofInternalWithdrawCancel(
+            accountId: Long,
+            amount: BigDecimal,
+            balanceAfterTx: BigDecimal,
+            idempotencyKey: String,     // "{sagaKey}-cancel" 형태
+        ) = TransactionHistory(
+            accountId       = accountId,
+            transactionType = TransactionType.TRANSFER_CANCEL,  // 아래 enum 추가
+            amount          = amount,
+            balanceAfterTx  = balanceAfterTx,
+            description     = "이체 취소",
+            idempotencyKey  = idempotencyKey,
+        )
     }
 
     fun releaseIdempotencyKey() {
