@@ -1,6 +1,7 @@
 package com.tossbank.transfer.infrastructure.kafka
 
 import com.tossbank.transfer.application.service.InternalTransferSagaOrchestrator
+import com.tossbank.transfer.application.service.SagaTransactionExecutor
 import com.tossbank.transfer.domain.model.InternalTransferSagaStatus
 import com.tossbank.transfer.infrastructure.client.AccountServiceClient
 import com.tossbank.transfer.infrastructure.client.dto.InquiryStatus
@@ -22,6 +23,7 @@ private val log = KotlinLogging.logger {}
 @Component
 class SagaConsumer(
     private val orchestrator: InternalTransferSagaOrchestrator,
+    private val sagaTransactionExecutor: SagaTransactionExecutor,
     private val accountServiceClient: AccountServiceClient,
     private val sagaRepository: InternalTransferSagaRepository,
     private val objectMapper: ObjectMapper,
@@ -65,7 +67,7 @@ class SagaConsumer(
                 when (result.status) {
                     InquiryStatus.SUCCESS -> {
                         withContext(dbDispatcher) {
-                            orchestrator.updateSagaAndClearOutbox(saga.id) {
+                            sagaTransactionExecutor.updateSagaAndClearOutbox(saga.id) {
                                 it.markWithdrawCompleted(result.balance!!)
                             }
                         }
@@ -80,7 +82,7 @@ class SagaConsumer(
                     }
                     InquiryStatus.NOT_FOUND -> {
                         withContext(dbDispatcher) {
-                            orchestrator.updateSagaAndClearOutbox(saga.id) {
+                            sagaTransactionExecutor.updateSagaAndClearOutbox(saga.id) {
                                 it.markWithdrawFailed()
                             }
                         }
@@ -91,24 +93,12 @@ class SagaConsumer(
 
             }.onFailure { e ->
                 log.error(e) { "출금 재조회 실패 — sagaId=${saga.id}" }
-
-                withContext(dbDispatcher) {
-                    val freshSaga = sagaRepository.findById(saga.id).orElse(null)
-                        ?: return@withContext
-
-                    if (freshSaga.isRetryExhausted()) {
-                        // TODO: Slack 알림
-                        orchestrator.updateSagaAndClearOutbox(freshSaga.id) {
-                            it.markManualRequired()
-                        }
-                        log.error { "출금 재조회 MANUAL_REQUIRED — sagaId=${saga.id} cause=${e.message}" }
-                    } else {
-                        orchestrator.updateSagaWithOutbox(freshSaga.id, OutboxEventType.WITHDRAW_INQUIRY) {
-                            it.markWithdrawUnknown()
-                        }
-                        log.warn { "출금 재조회 실패 → 재시도 예약 — sagaId=${saga.id} cause=${e.message}" }
-                    }
-                }
+                handleRetryOrEscalate(
+                    sagaId    = saga.id,
+                    retryType = OutboxEventType.WITHDRAW_INQUIRY,
+                    retryMutate    = { it.markWithdrawUnknown() },
+                    escalateMutate = { it.markManualRequired() },
+                )
                 ack.acknowledge()
             }
         }
@@ -152,7 +142,7 @@ class SagaConsumer(
                     InquiryStatus.SUCCESS -> {
                         // 입금 완료 확인 → COMPLETED
                         withContext(dbDispatcher) {
-                            orchestrator.updateSagaAndClearOutbox(saga.id) {
+                            sagaTransactionExecutor.updateSagaAndClearOutbox(saga.id) {
                                 it.markCompleted()
                             }
                         }
@@ -160,7 +150,10 @@ class SagaConsumer(
                     }
                     InquiryStatus.NOT_FOUND -> {
                         withContext(dbDispatcher) {
-                            orchestrator.updateSagaWithOutbox(saga.id, OutboxEventType.COMPENSATE_WITHDRAW) {
+                            sagaTransactionExecutor.updateSagaWithOutbox(
+                                sagaId    = saga.id,
+                                eventType = OutboxEventType.COMPENSATE_WITHDRAW,
+                            ) {
                                 it.markCompensating()
                             }
                         }
@@ -172,24 +165,45 @@ class SagaConsumer(
             }.onFailure { e ->
                 log.error(e) { "입금 재조회 실패 — sagaId=${saga.id}" }
 
-                withContext(dbDispatcher) {
-                    val freshSaga = sagaRepository.findById(saga.id).orElse(null)
-                        ?: return@withContext
-
-                    if (freshSaga.isRetryExhausted()) {
-                        // TODO: Slack 알림
-                        orchestrator.updateSagaAndClearOutbox(freshSaga.id) {
-                            it.markManualRequired()
-                        }
-                        log.error { "입금 재조회 MANUAL_REQUIRED — sagaId=${saga.id} cause=${e.message}" }
-                    } else {
-                        orchestrator.updateSagaWithOutbox(freshSaga.id, OutboxEventType.DEPOSIT_INQUIRY) {
-                            it.markDepositUnknown()
-                        }
-                        log.warn { "입금 재조회 실패 → 재시도 예약 — sagaId=${saga.id} cause=${e.message}" }
-                    }
-                }
+                handleRetryOrEscalate(
+                    sagaId         = saga.id,
+                    retryType      = OutboxEventType.DEPOSIT_INQUIRY,
+                    retryMutate    = { it.markDepositUnknown() },
+                    escalateMutate = { it.markManualRequired() },
+                )
                 ack.acknowledge()
+            }
+        }
+    }
+
+    private fun parsePayload(value: String, ack: Acknowledgment): SagaEventPayload? =
+        runCatching { objectMapper.readValue(value, SagaEventPayload::class.java) }
+            .getOrElse {
+                log.error { "페이로드 파싱 실패 — value=$value" }
+                ack.acknowledge()
+                null
+            }
+
+    private suspend fun handleRetryOrEscalate(
+        sagaId: Long,
+        retryType: OutboxEventType,
+        retryMutate: (com.tossbank.transfer.domain.model.InternalTransferSaga) -> Unit,
+        escalateMutate: (com.tossbank.transfer.domain.model.InternalTransferSaga) -> Unit,
+    ) {
+        withContext(dbDispatcher) {
+            val freshSaga = sagaRepository.findById(sagaId).orElse(null) ?: return@withContext
+
+            if (freshSaga.isRetryExhausted()) {
+                // TODO: Slack 알림
+                sagaTransactionExecutor.updateSagaAndClearOutbox(freshSaga.id, escalateMutate)
+                log.error { "재조회 MANUAL_REQUIRED — sagaId=$sagaId" }
+            } else {
+                sagaTransactionExecutor.updateSagaWithOutbox(
+                    sagaId    = freshSaga.id,
+                    eventType = retryType,
+                    mutate    = retryMutate,
+                )
+                log.warn { "재조회 실패 → 재시도 예약 — sagaId=$sagaId" }
             }
         }
     }
