@@ -18,7 +18,7 @@ interface InternalTransferSagaRepository : JpaRepository<InternalTransferSaga, L
             'WITHDRAW_COMPLETED',
             'WITHDRAW_UNKNOWN',
             'DEPOSIT_UNKNOWN',
-            'COMPENSATING
+            'COMPENSATING'
         )
         AND s.updatedAt <= :threshold
     """)
