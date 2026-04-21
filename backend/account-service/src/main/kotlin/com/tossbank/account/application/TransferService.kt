@@ -1,6 +1,5 @@
 package com.tossbank.account.application
 
-import CompensationFailedException
 import ExternalBankApiException
 import ExternalTransferFailedException
 import ExternalTransferUnknownException
@@ -97,8 +96,14 @@ class TransferService(
                         withContext(dbDispatcher) {
                             transferTransactionExecutor.compensateInterbank(interbankId)
                         }
-                    } catch (ce: CompensationFailedException) {
+                    } catch (ce: Exception) {
                         // 보상 실패 → COMPENSATION_PENDING은 REQUIRES_NEW로 커밋
+                        withContext(dbDispatcher) {
+                            transferTransactionExecutor.markCompensationFailed(
+                                interbankTransferId = interbankId,
+                                errorMessage        = ce.message ?: "compensation failed",
+                            )
+                        }
                         // 스케줄러가 재시도 예정
                         log.error(ce.cause) {
                             "보상 트랜잭션 실패 → COMPENSATION_PENDING 스케줄러 재시도 예정: id=$interbankId"

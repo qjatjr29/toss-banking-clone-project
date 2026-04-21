@@ -1,7 +1,6 @@
 package com.tossbank.account.application
 
 import AccountNotFoundException
-import CompensationFailedException
 import ExternalTransferFailedException
 import InterbankTransferNotFoundException
 import com.tossbank.account.application.dto.InterbankTransferContext
@@ -179,35 +178,28 @@ class TransferTransactionExecutor(
     fun compensateInterbank(interbankTransferId: Long) {
         val transfer = findInterbankTransfer(interbankTransferId)
 
-        try {
-            val fromAccount = accountRepository.findByIdWithLock(transfer.fromAccountId)
-                ?: throw AccountNotFoundException()
+        val fromAccount = accountRepository.findByIdWithLock(transfer.fromAccountId)
+            ?: throw AccountNotFoundException()
 
-            val idempotencyKey = transfer.idempotencyKey
-                ?: throw IllegalStateException("idempotencyKey가 null인 건은 보상 처리 불가: id=$interbankTransferId")
+        val idempotencyKey = transfer.idempotencyKey
+            ?: throw IllegalStateException("idempotencyKey null: id=$interbankTransferId")
 
+        fromAccount.deposit(transfer.amount)
+        transactionHistoryRepository.findByIdempotencyKey(idempotencyKey)
+            ?.releaseIdempotencyKey()
 
-            fromAccount.deposit(transfer.amount)
-            transactionHistoryRepository.findByIdempotencyKey(idempotencyKey)
-                ?.releaseIdempotencyKey()
-
-            transactionHistoryRepository.save(
-                TransactionHistory.ofInterbankWithdrawCancel(
-                    accountId       = fromAccount.id,
-                    amount          = transfer.amount,
-                    balanceAfterTx  = fromAccount.balance,
-                    toAccountNumber = transfer.toAccountNumber,
-                    toBankCode      = transfer.toBankCode,
-                    idempotencyKey  = idempotencyKey,
-                )
+        transactionHistoryRepository.save(
+            TransactionHistory.ofInterbankWithdrawCancel(
+                accountId       = fromAccount.id,
+                amount          = transfer.amount,
+                balanceAfterTx  = fromAccount.balance,
+                toAccountNumber = transfer.toAccountNumber,
+                toBankCode      = transfer.toBankCode,
+                idempotencyKey  = idempotencyKey,
             )
-
-            transfer.markCompensated()
-            log.warn { "보상 트랜잭션 완료(COMPENSATED): id=$interbankTransferId amount=${transfer.amount}" }
-        }   catch (e: Exception) {
-            markCompensationFailed(interbankTransferId, e.message ?: "unknown error")
-            throw CompensationFailedException(e)
-        }
+        )
+        transfer.markCompensated()
+        log.debug { "보상 트랜잭션 완료: id=$interbankTransferId" }
     }
 
     // 스케줄러에서 UNKNOWN 재조회 실패 / PROCESSING 시 nextRetryAt 갱신
@@ -217,6 +209,10 @@ class TransferTransactionExecutor(
         errorMessage        : String = "retry scheduled",
     ) {
         val transfer = findInterbankTransfer(interbankTransferId)
+        if (transfer.status != InterbankTransferStatus.UNKNOWN) {
+            log.warn { "scheduleNextRetryForUnknown 스킵 — 이미 상태 변경됨: status=${transfer.status}" }
+            return
+        }
         transfer.lastErrorMessage = errorMessage
         transfer.scheduleNextRetry()
     }
