@@ -78,6 +78,10 @@ class InterbankTransfer(
     }
 
     fun markCompleted(externalTxId: String) {
+        if (status != InterbankTransferStatus.WITHDRAW_COMPLETED &&
+            status != InterbankTransferStatus.UNKNOWN) {
+            throw InvalidTransferStateTransitionException()
+        }
         status = InterbankTransferStatus.COMPLETED
         externalTransactionId = externalTxId
     }
