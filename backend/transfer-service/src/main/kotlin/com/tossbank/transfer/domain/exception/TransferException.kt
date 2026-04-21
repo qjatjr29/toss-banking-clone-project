@@ -20,3 +20,5 @@ class TransferFailedException : CustomException(TransferErrorCode.TRANSFER_FAILE
 class TransferNotFoundException : CustomException(TransferErrorCode.TRANSFER_NOT_FOUND)
 class UnauthorizedTransferAccessException : CustomException(TransferErrorCode.UNAUTHORIZED)
 class TransferInProgressException(val sagaId: Long) : CustomException(TransferErrorCode.TRANSFER_IN_PROGRESS)
+
+class InvalidTransferStateTransitionException : CustomException(TransferErrorCode.INVALID_TRANSFER_STATE_TRANSITION)
