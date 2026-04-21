@@ -26,4 +26,5 @@ enum class TransferErrorCode(
     EXTERNAL_TRANSFER_FAILED(HttpStatus.BAD_REQUEST, "T010", "타행 이체에 실패했습니다"),
     EXTERNAL_TRANSFER_IN_PROGRESS(HttpStatus.CONFLICT, "T011", "이체가 처리 중입니다. 잠시 후 다시 시도해주세요"),
     EXTERNAL_TRANSFER_MANUAL_REQUIRED(HttpStatus.INTERNAL_SERVER_ERROR, "T012", "이체 처리 중 오류가 발생했습니다. 고객센터에 문의해주세요"),
+    INVALID_TRANSFER_STATE_TRANSITION(HttpStatus.INTERNAL_SERVER_ERROR, "T013", "유효하지 않은 이체 상태 전이입니다"),
 }
