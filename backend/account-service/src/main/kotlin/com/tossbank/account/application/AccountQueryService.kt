@@ -2,6 +2,7 @@ package com.tossbank.account.application
 
 import AccountNotFoundException
 import com.tossbank.account.domain.model.AccountStatus
+import com.tossbank.account.infrastructure.client.ExternalBankAccountClient
 import com.tossbank.account.infrastructure.persistence.AccountRepository
 import com.tossbank.account.presentation.dto.AccountHolderResponse
 import com.tossbank.account.presentation.dto.AccountResponse
@@ -19,6 +20,7 @@ private val log = KotlinLogging.logger {}
 @Transactional(readOnly = true)
 class AccountQueryService(
     private val accountRepository: AccountRepository,
+    private val externalBankClient: ExternalBankAccountClient,
     @Qualifier("dbDispatcher") private val dbDispatcher: CoroutineDispatcher,
 ) {
 
@@ -52,12 +54,17 @@ class AccountQueryService(
         bankCode: String,
     ): AccountHolderResponse = withContext(dbDispatcher) {
 
-        // 타행 계좌는 외부 API 호출 (추후 구현)
         if (bankCode != BankConstants.TOSS_BANK_CODE) {
-            return@withContext inquireExternalBank(accountNumber, bankCode)
+            log.info { "타행 계좌 실명 조회 — bankCode=$bankCode accountNumber=$accountNumber" }
+            val response = externalBankClient.inquireAccountHolder(accountNumber)
+            return@withContext AccountHolderResponse(
+                accountNumber = response.accountNumber,
+                holderName    = response.holderName,
+                bankCode      = bankCode,
+            )
         }
 
-        // 당행 계좌 — 내부 DB 조회
+        // 당행 → 내부 DB 조회
         val account = accountRepository.findByAccountNumberAndStatus(
             accountNumber = accountNumber,
             status        = AccountStatus.ACTIVE,
@@ -69,17 +76,4 @@ class AccountQueryService(
             bankCode      = bankCode,
         )
     }
-
-    private fun inquireExternalBank(
-        accountNumber: String,
-        bankCode: String,
-    ): AccountHolderResponse {
-        // Mock 응답
-        return AccountHolderResponse(
-            accountNumber = accountNumber,
-            holderName    = "홍길동",  // 실제로는 외부 API 응답
-            bankCode      = bankCode,
-        )
-    }
-
 }
