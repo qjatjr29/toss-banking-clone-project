@@ -2,71 +2,85 @@ package com.tossbank.external.application.service
 
 import com.tossbank.external.domain.exception.ExternalBankClientException
 import com.tossbank.external.domain.exception.ExternalBankErrorCode
-import com.tossbank.external.domain.exception.ExternalBankServerException
-import com.tossbank.external.presentation.dto.*
-import kotlinx.coroutines.delay
+import com.tossbank.external.domain.model.InboundTransfer
+import com.tossbank.external.domain.model.InboundTransferStatus
+import com.tossbank.external.infrastructure.config.MockAccountProperties
+import com.tossbank.external.infrastructure.persistence.InboundTransferRepository
+import com.tossbank.external.presentation.dto.AccountHolderResponse
+import com.tossbank.external.presentation.dto.InboundTransferRequest
+import com.tossbank.external.presentation.dto.InboundTransferResponse
+import com.tossbank.external.presentation.dto.InboundTransferResultResponse
 import mu.KotlinLogging
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.*
-import java.util.concurrent.ConcurrentHashMap
 
 private val log = KotlinLogging.logger {}
 
 @Service
-class InboundTransferService {
+class InboundTransferService(
+    private val inboundTransferRepository: InboundTransferRepository,
+    private val mockAccountProperties: MockAccountProperties,
+) {
 
-    // 입금 완료된 거래 저장소 (UNKNOWN 재조회 시나리오 지원)
-    private val transferStore = ConcurrentHashMap<String, InboundTransferStatus>()
-
-    // 타행으로부터 입금 요청 수신
-    suspend fun receiveTransfer(request: InboundTransferRequest): InboundTransferResponse {
-        return when (request.scenario) {
-            MockScenario.SUCCESS -> {
-                val externalId = UUID.randomUUID().toString()
-                transferStore[externalId] = InboundTransferStatus.CREDITED
-                log.info { "[ExternalBank] 입금 완료 - externalId: $externalId" }
-                InboundTransferResponse(
-                    externalTransactionId = externalId,
-                    status = InboundTransferStatus.CREDITED
+    // 멱등성 보장: 동일 idempotencyKey 재요청 시 기존 결과 반환
+    @Transactional
+    fun receiveTransfer(
+        idempotencyKey: String,
+        request: InboundTransferRequest,
+    ): InboundTransferResponse {
+        inboundTransferRepository.findByIdempotencyKey(idempotencyKey)
+            ?.let { existing ->
+                log.warn { "[MockBank] 중복 요청 — 기존 결과 반환: key=$idempotencyKey" }
+                return InboundTransferResponse(
+                    externalTransactionId = existing.externalTransactionId,
                 )
             }
 
-            MockScenario.CLIENT_ERROR -> {
-                log.warn { "[ExternalBank] 입금 실패 — 존재하지 않는 계좌: ${request.toAccountNumber}" }
-                throw ExternalBankClientException(ExternalBankErrorCode.INVALID_ACCOUNT)
-            }
+        // 수취 계좌 존재 여부 확인
+        mockAccountProperties.findHolderName(request.toAccountNumber)
+            ?: throw ExternalBankClientException(ExternalBankErrorCode.INVALID_ACCOUNT)
 
-            MockScenario.SERVER_ERROR -> {
-                log.error { "[ExternalBank] 내부 오류 발생 — 입금 처리 실패" }
-                throw ExternalBankServerException(ExternalBankErrorCode.EXTERNAL_BANK_ERROR)
-            }
+        val externalTransactionId = UUID.randomUUID().toString()
 
-            MockScenario.TIMEOUT -> {
-                // 실제로는 입금이 처리됐지만 응답 지연
-                // → 송금 은행(토스뱅크) 입장에서 타임아웃 → UNKNOWN 상태 재현
-                val externalId = UUID.randomUUID().toString()
-                transferStore[externalId] = InboundTransferStatus.CREDITED
-                log.warn { "[ExternalBank] 응답 지연 시나리오 - externalId: $externalId (30초 지연, 실제 입금은 완료됨)" }
-                delay(30_000L)
-                InboundTransferResponse(
-                    externalTransactionId = externalId,
-                    status = InboundTransferStatus.CREDITED
-                )
-            }
-        }
+        inboundTransferRepository.save(
+            InboundTransfer(
+                idempotencyKey        = idempotencyKey,
+                externalTransactionId = externalTransactionId,
+                fromBankCode          = request.fromBankCode,
+                fromAccountNumber     = request.fromAccountNumber,
+                toAccountNumber       = request.toAccountNumber,
+                amount                = request.amount,
+                status                = InboundTransferStatus.SUCCESS,
+            )
+        )
+
+        log.info { "[MockBank] 입금 완료 — key=$idempotencyKey externalId=$externalTransactionId" }
+        return InboundTransferResponse(externalTransactionId = externalTransactionId)
     }
 
-    // 송금 은행의 재조회 요청
-    suspend fun getTransferResult(externalTransactionId: String): InboundTransferStatusResponse {
-        val status = transferStore[externalTransactionId]
-            ?: return InboundTransferStatusResponse(
-                externalTransactionId = externalTransactionId,
-                status = InboundTransferStatus.NOT_FOUND
+    @Transactional(readOnly = true)
+    fun getTransferResult(idempotencyKey: String): InboundTransferResultResponse {
+        val transfer = inboundTransferRepository.findByIdempotencyKey(idempotencyKey)
+            ?: return InboundTransferResultResponse(
+                idempotencyKey = idempotencyKey,
+                status         = InboundTransferStatus.NOT_FOUND.name,
             )
 
-        return InboundTransferStatusResponse(
-            externalTransactionId = externalTransactionId,
-            status = status
+        return InboundTransferResultResponse(
+            idempotencyKey        = idempotencyKey,
+            externalTransactionId = transfer.externalTransactionId,
+            status                = transfer.status.name,
+        )
+    }
+
+    fun inquireAccountHolder(accountNumber: String): AccountHolderResponse {
+        val holderName = mockAccountProperties.findHolderName(accountNumber)
+            ?: throw ExternalBankClientException(ExternalBankErrorCode.INVALID_ACCOUNT)
+
+        return AccountHolderResponse(
+            accountNumber = accountNumber,
+            holderName    = holderName,
         )
     }
 }

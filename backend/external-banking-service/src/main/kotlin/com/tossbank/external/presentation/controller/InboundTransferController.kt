@@ -1,33 +1,41 @@
 package com.tossbank.external.presentation.controller
 
 import com.tossbank.external.application.service.InboundTransferService
+import com.tossbank.external.presentation.dto.AccountHolderResponse
 import com.tossbank.external.presentation.dto.InboundTransferRequest
 import com.tossbank.external.presentation.dto.InboundTransferResponse
-import com.tossbank.external.presentation.dto.InboundTransferStatusResponse
+import com.tossbank.external.presentation.dto.InboundTransferResultResponse
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/v1/inbound-transfer")
+@RequestMapping("/api/v1")
 class InboundTransferController(
-    private val inboundTransferService: InboundTransferService
+    private val inboundTransferService: InboundTransferService,
 ) {
 
-    // 타행으로부터 입금 요청 수신
-    @PostMapping
-    suspend fun receiveTransfer(
-        @RequestBody request: InboundTransferRequest
+    @PostMapping("/inbound-transfer")
+    fun receiveTransfer(
+        @RequestHeader("Idempotency-Key") idempotencyKey: String,
+        @RequestBody request: InboundTransferRequest,
     ): ResponseEntity<InboundTransferResponse> {
-        val result = inboundTransferService.receiveTransfer(request)
+        val result = inboundTransferService.receiveTransfer(idempotencyKey, request)
         return ResponseEntity.ok(result)
     }
 
-    // 입금 처리 결과 조회
-    @GetMapping("/{externalTransactionId}")
-    suspend fun getTransferResult(
-        @PathVariable externalTransactionId: String
-    ): ResponseEntity<InboundTransferStatusResponse> {
-        val result = inboundTransferService.getTransferResult(externalTransactionId)
+    @GetMapping("/inbound-transfer/result/{idempotencyKey}")
+    fun getTransferResult(
+        @PathVariable idempotencyKey: String,
+    ): ResponseEntity<InboundTransferResultResponse> {
+        val result = inboundTransferService.getTransferResult(idempotencyKey)
+        return ResponseEntity.ok(result)
+    }
+
+    @GetMapping("/accounts/holder")
+    fun inquireAccountHolder(
+        @RequestParam accountNumber: String,
+    ): ResponseEntity<AccountHolderResponse> {
+        val result = inboundTransferService.inquireAccountHolder(accountNumber)
         return ResponseEntity.ok(result)
     }
 }
