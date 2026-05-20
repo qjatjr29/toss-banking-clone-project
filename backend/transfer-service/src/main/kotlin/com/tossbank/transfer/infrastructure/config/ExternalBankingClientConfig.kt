@@ -20,7 +20,7 @@ class ExternalBankingClientConfig {
     @Value("\${external-banking.timeout-seconds:10}")
     private var timeoutSeconds: Long = 10
 
-    @Bean
+    @Bean("externalBankingWebClient")
     fun externalBankingWebClient(): WebClient {
         val httpClient = HttpClient.create()
             .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3_000)
