@@ -95,6 +95,15 @@ class InterbankTransferSaga(
         scheduleNextRetry()
     }
 
+    fun markWithdrawUnknown() {
+        if (status != InterbankTransferSagaStatus.PENDING &&
+            status != InterbankTransferSagaStatus.WITHDRAW_UNKNOWN) {
+            throw InvalidTransferStateTransitionException()
+        }
+        status = InterbankTransferSagaStatus.WITHDRAW_UNKNOWN
+        scheduleNextRetry()
+    }
+
     /**
      * 외부 송금 성공 확인
      * WITHDRAW_COMPLETED(정상 흐름) 또는 TRANSFER_UNKNOWN(재조회 후 성공 확인) 에서만 전이 가능

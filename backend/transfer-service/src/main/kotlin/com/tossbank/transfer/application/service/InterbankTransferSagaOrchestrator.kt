@@ -18,6 +18,7 @@ import com.tossbank.transfer.infrastructure.outbox.OutboxEvent
 import com.tossbank.transfer.infrastructure.outbox.OutboxEventType
 import com.tossbank.transfer.infrastructure.persistence.InterbankTransferSagaRepository
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Qualifier
@@ -53,6 +54,7 @@ class InterbankTransferSagaOrchestrator(
                 callExternalTransfer(saga)
 
             // 결과 불확실 → 재조회 진행 중
+            InterbankTransferSagaStatus.WITHDRAW_UNKNOWN,
             InterbankTransferSagaStatus.TRANSFER_UNKNOWN ->
                 InterbankTransferResult.inProgress(saga.id)
 

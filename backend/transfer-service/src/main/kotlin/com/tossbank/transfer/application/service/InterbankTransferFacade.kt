@@ -3,6 +3,7 @@ package com.tossbank.transfer.application.service
 import com.tossbank.transfer.application.dto.InterbankTransferRequest
 import com.tossbank.transfer.application.dto.InterbankTransferResult
 import com.tossbank.transfer.infrastructure.client.MemberClient
+import com.tossbank.transfer.presentation.dto.InterbankTransferHttpRequest
 import org.springframework.stereotype.Service
 
 @Service
