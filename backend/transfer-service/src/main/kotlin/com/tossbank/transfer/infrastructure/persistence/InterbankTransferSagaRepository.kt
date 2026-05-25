@@ -11,16 +11,20 @@ interface InterbankTransferSagaRepository : JpaRepository<InterbankTransferSaga,
     fun findByIdempotencyKey(idempotencyKey: String): InterbankTransferSaga?
 
     /**
-     * 서버 문제로 처리가 중단된 Saga 조회
+     * 서버 크래시로 처리가 중단된 Saga 조회
      *
-     * WITHDRAW_COMPLETED: 출금 완료 후 외부 송금 미시도
-     * TRANSFER_UNKNOWN:   재조회 Outbox가 유실된 경우
-     * COMPENSATING:       보상 Outbox가 유실된 경우
+     * PENDING:            출금 시도 전 서버 크래시
+     * WITHDRAW_COMPLETED: 출금 완료 후 외부 송금 시도 전 서버 크래시
+     * WITHDRAW_UNKNOWN:   출금 재조회 Outbox 유실
+     * TRANSFER_UNKNOWN:   외부 송금 재조회 Outbox 유실
+     * COMPENSATING:       보상 Outbox 유실
      */
     @Query("""
         SELECT s FROM InterbankTransferSaga s
         WHERE s.status IN (
+            'PENDING',
             'WITHDRAW_COMPLETED',
+            'WITHDRAW_UNKNOWN',
             'TRANSFER_UNKNOWN',
             'COMPENSATING'
         )
