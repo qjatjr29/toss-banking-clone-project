@@ -32,6 +32,9 @@ class InterbankTransferSaga(
     @Column(name = "to_bank_code", nullable = false, length = 10)
     val toBankCode: String,
 
+    @Column(name = "from_member_name", nullable = false, length = 50)
+    val fromMemberName: String,
+
     @Column(name = "to_member_name", nullable = false, length = 50)
     val toMemberName: String,
 

@@ -20,6 +20,7 @@ class InterbankTransferSagaTest : BehaviorSpec({
             fromAccountNumber = "1000-0000-0001",
             toAccountNumber   = "2000-0000-0001",
             toBankCode        = "004",
+            fromMemberName    = "김철수",
             toMemberName      = "홍길동",
             amount            = BigDecimal("10000"),
             description       = null,
