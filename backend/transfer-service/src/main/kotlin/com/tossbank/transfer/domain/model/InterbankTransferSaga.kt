@@ -32,6 +32,9 @@ class InterbankTransferSaga(
     @Column(name = "to_bank_code", nullable = false, length = 10)
     val toBankCode: String,
 
+    @Column(name = "from_member_name", nullable = false, length = 50)
+    val fromMemberName: String,
+
     @Column(name = "to_member_name", nullable = false, length = 50)
     val toMemberName: String,
 
@@ -89,6 +92,15 @@ class InterbankTransferSaga(
         }
         status = InterbankTransferSagaStatus.TRANSFER_UNKNOWN
         lastErrorMessage = errorMessage
+        scheduleNextRetry()
+    }
+
+    fun markWithdrawUnknown() {
+        if (status != InterbankTransferSagaStatus.PENDING &&
+            status != InterbankTransferSagaStatus.WITHDRAW_UNKNOWN) {
+            throw InvalidTransferStateTransitionException()
+        }
+        status = InterbankTransferSagaStatus.WITHDRAW_UNKNOWN
         scheduleNextRetry()
     }
 
